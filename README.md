@@ -156,20 +156,20 @@ npm start          # http://localhost:5000
 
 ## Deployment
 
-### Render (recommended, one click)
+### Render (recommended, free)
 
-The repository ships a [`render.yaml`](render.yaml) blueprint:
+The repository ships a [`render.yaml`](render.yaml) blueprint configured for Render's **Free** plan (no card required):
 
 1. Push the repo to GitHub — `npm run publish`. If the GitHub CLI is installed but not signed in, the script starts the browser sign-in flow, then creates the repo and pushes.
 2. Render → **New → Blueprint** → select the repo.
-3. Fill in `GEMINI_API_KEY` and `AUTHORITY_INVITE_CODE` when prompted.
-4. Deploy. The blueprint provisions a 1 GB disk at `/data`, generates `JWT_SECRET`, sets `NODE_ENV=production`, and seeds 12 pre-triaged demo incidents into the empty volume (`SEED_DEMO_DATA=true`) so the live feed is never blank.
+3. Fill in `GEMINI_API_KEY` and a **new** `AUTHORITY_INVITE_CODE` when prompted.
+4. Deploy. Render builds the Docker image, generates `JWT_SECRET`, sets `NODE_ENV=production`, and seeds 12 pre-triaged demo incidents on first boot (`SEED_DEMO_DATA=true`) so the live feed is never blank.
+
+The free instance has 512 MB RAM and sleeps after 15 minutes idle, so the first request after a quiet period takes roughly a minute to wake. `/data` is ephemeral: SQLite, reports and uploads reset on restart/redeploy, and `SEED_DEMO_DATA=true` repopulates the 12 demo incidents on the next boot. That is fine for the hackathon demo. For persistence, switch `plan` to `starter` and add a 1 GB disk mounted at `/data` (paid), or point `REPORT_IMAGE_STORAGE=s3` and the database at hosted services.
 
 Remove `SEED_DEMO_DATA` once the deployment receives real reports. The health check is `GET /api/health`. Because the blueprint provisions no SMTP credentials, it also sets `RETURN_VERIFICATION_LINK=true`: the register dialog hands you the verification link after the password check so accounts work out of the box. Configure SMTP and flip that to `false` for a real deployment.
 
 Render injects `RENDER_EXTERNAL_URL`, so verification links, canonical tags and the sitemap use the real public origin. The app never derives those URLs from the request `Host` header.
-
-> Render's free tier does not support persistent disks. Use the Starter plan, or point `REPORT_IMAGE_STORAGE=s3` and `CIVICGUARD_DB_PATH` at a hosted database if you need a free tier.
 
 ### Docker / any container host
 
@@ -330,6 +330,7 @@ See [`docs/copilot-evidence.md`](docs/copilot-evidence.md) for the export metada
 - Status changes do not yet record an audit trail (actor, timestamp, note).
 - Email verification is required, so a deployment without SMTP cannot onboard users unless `RETURN_VERIFICATION_LINK` is enabled.
 - No automated UI tests in CI; Playwright checks for layout, modal accessibility and form submission were run manually.
+- The free Render deployment uses ephemeral storage: the 12 demo incidents reseed, but user accounts, reports and uploads reset on restart/redeploy. Use the Starter disk for persistence.
 - AI triage depends on the Gemini free-tier quota (20 reports/day for `gemini-3.8-flash`); exhausted quota degrades gracefully to manual review.
 
 ## License

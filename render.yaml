@@ -3,7 +3,10 @@ services:
     name: civicguard
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: starter
+    # Render Free: 512 MB RAM, sleeps after 15 minutes idle, no card required.
+    # This is enough for the hackathon demo; data is ephemeral (see the comment
+    # at the end of this service).
+    plan: free
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
@@ -36,7 +39,7 @@ services:
       # boot so the deployed demo is never empty. Remove for a real deployment.
       - key: SEED_DEMO_DATA
         value: "true"
-    disk:
-      name: civicguard-data
-      mountPath: /data
-      sizeGB: 1
+    # Free plan: /data is ephemeral and resets on restart/redeploy.
+    # SEED_DEMO_DATA=true repopulates the 12 demo incidents on the next boot.
+    # For persistent SQLite/uploads, switch to the Starter plan and add a 1 GB
+    # disk mounted at /data.

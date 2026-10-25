@@ -62,13 +62,14 @@ The SPA talks only to `/api` on the same origin. Express validates and persists 
 - AI triage is text + first image only, English.
 - No duplicate clustering yet; nearby duplicates are a natural next step.
 - No SMTP in the demo blueprint, so the verification link is echoed only after the account password is proved. Turn `RETURN_VERIFICATION_LINK` off once mail is configured.
+- The free Render deployment has ephemeral `/data`: demo incidents reseed on boot, but user accounts, reports and uploads reset on restart. Switch to Starter with a disk for persistence.
 
 ## Submission checklist
 
 - [x] Include the complete GitHub Copilot chat history at `backend/CIVICGAURD.json` (43 requests; metadata in `docs/copilot-evidence.md`).
 - [x] README covers the concept, setup/run instructions and dependencies.
 - [x] Push this repo to GitHub — https://github.com/rexis67/civicguard (CI passing on `main`).
-- [ ] Deploy to Render with the blueprint in `render.yaml`; set `GEMINI_API_KEY` and a **new** `AUTHORITY_INVITE_CODE`.
+- [ ] Deploy to Render on the **Free** plan with the blueprint in `render.yaml`; set `GEMINI_API_KEY` and a **new** `AUTHORITY_INVITE_CODE`. Free instances sleep after 15 minutes idle and reset `/data` on restart; the 12 demo incidents reseed automatically.
 - [ ] Open the deployed URL once, confirm 12 seeded incidents and one new submission.
 - [ ] Email the GitHub repository link (and live demo URL) to **legacydavpv@gmail.com** before **25 October 2026, midnight**.
 
