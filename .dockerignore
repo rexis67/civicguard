@@ -15,3 +15,5 @@ backend/.jwt-secret
 backend/uploads
 *.log
 README.md
+SUBMISSION.md
+docs
