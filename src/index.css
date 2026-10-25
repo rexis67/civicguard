@@ -48,8 +48,8 @@ body.has-cursor [contenteditable="true"] {
   z-index: 9999;
   pointer-events: none;
   mix-blend-mode: difference;
-  transform: translate(-50%, -50%);
   transform-origin: center;
+  will-change: transform;
 }
 
 .target-cursor-dot {
@@ -67,6 +67,7 @@ body.has-cursor [contenteditable="true"] {
   width: 12px;
   height: 12px;
   border: 0 solid #fff;
+  will-change: transform;
 }
 
 .target-cursor-bracket-tl {

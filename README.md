@@ -79,7 +79,7 @@ Everything mutable lives under one data directory (`/data` in Docker), which is 
 
 | Layer | Choice |
 |---|---|
-| UI | React 18, Vite 6, Tailwind CSS 3, GSAP |
+| UI | React 18, Vite 6, Tailwind CSS 3 |
 | API | Express 4, Node 20+ |
 | Auth | JWT (8 h), bcrypt (cost 12), email verification tokens hashed with SHA-256 |
 | Storage | SQLite (`better-sqlite3`) for users, JSON document store for reports, local disk or S3-compatible object storage for images |

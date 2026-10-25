@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { gsap } from "gsap";
 
 const TARGET_SELECTOR = "a:not(.no-cursor-snap), button:not(.no-cursor-snap), .cursor-target";
 const REST_POSITIONS = {
@@ -9,9 +8,16 @@ const REST_POSITIONS = {
   br: { x: 6, y: 6 },
   bl: { x: -18, y: 6 },
 };
+const BRACKET_KEYS = Object.keys(REST_POSITIONS);
 const BRACKET_SIZE = 12;
 const OUTSET = 3;
 const EDGE_GUTTER = 30;
+
+// hit-testing forces layout, so keep it well below one call per frame
+const HIT_TEST_INTERVAL_MS = 80;
+const RECT_REFRESH_MS = 120;
+const IDLE_TEST_DELAY_MS = 140;
+const SCROLL_WINDOW_MS = 160;
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), Math.max(min, max));
@@ -64,263 +70,301 @@ export default function TargetCursor() {
     if (!wrapper || !dot) return undefined;
 
     const brackets = bracketRefs.current;
-    let pointerX = window.innerWidth / 2;
-    let pointerY = window.innerHeight / 2;
-    let rawPointerX = pointerX;
-    let rawPointerY = pointerY;
-    let lockedTarget = null;
-    let rotationTween = null;
-    let restartTween = null;
-    let pointerInside = false;
-    const lockState = { strength: 0 };
+    if (BRACKET_KEYS.some((key) => !brackets[key])) return undefined;
 
-    document.body.classList.add("has-cursor");
-    gsap.set(wrapper, { x: pointerX, y: pointerY, rotation: 0, scale: 1, autoAlpha: 0 });
-    Object.entries(REST_POSITIONS).forEach(([key, position]) => {
-      gsap.set(brackets[key], position);
-    });
+    let viewportWidth = window.innerWidth;
+    let viewportHeight = window.innerHeight;
 
-    let moveX;
-    let moveY;
+    let pointerX = viewportWidth / 2;
+    let pointerY = viewportHeight / 2;
+    let lastMoveAt = 0;
 
-    function createPointerTweens() {
-      moveX = gsap.quickTo(wrapper, "x", {
-        duration: 0.1,
-        ease: "power3.out",
-      });
-      moveY = gsap.quickTo(wrapper, "y", {
-        duration: 0.1,
-        ease: "power3.out",
-      });
+    let targetElement = null;
+    let targetRect = null;
+    let lockedPositions = null;
+    let strength = 0;
+    let strengthTarget = 0;
+    let rotation = 0;
+    let scale = 1;
+    let scaleTarget = 1;
+    let dotScale = 1;
+    let dotScaleTarget = 1;
+
+    let visible = false;
+    let bodyCursorHidden = false;
+    let needsHitTest = false;
+    let idleTested = true;
+    let lastHitTest = 0;
+    let lastRectRefresh = 0;
+    let scrollUntil = 0;
+
+    let frameHandle = 0;
+    let lastFrame = performance.now();
+    const lastBracketTransforms = {};
+
+    const setVisible = (next) => {
+      if (visible === next) return;
+      visible = next;
+      wrapper.style.opacity = next ? "1" : "0";
+      wrapper.style.visibility = next ? "visible" : "hidden";
+      if (bodyCursorHidden !== next) {
+        bodyCursorHidden = next;
+        document.body.classList.toggle("has-cursor", next);
+      }
+    };
+
+    const startLoop = () => {
+      if (frameHandle) return;
+      lastFrame = performance.now();
+      frameHandle = requestAnimationFrame(tick);
+    };
+
+    const stopLoop = () => {
+      if (!frameHandle) return;
+      cancelAnimationFrame(frameHandle);
+      frameHandle = 0;
+    };
+
+    function hitTest(now) {
+      lastHitTest = now;
+      needsHitTest = false;
+
+      const found = findTargetAtPoint(pointerX, pointerY);
+      if (found === targetElement) return;
+
+      if (found) {
+        targetElement = found;
+        targetRect = found.getBoundingClientRect();
+        strengthTarget = 1;
+        lastRectRefresh = now;
+      } else {
+        targetElement = null;
+        targetRect = null;
+        strengthTarget = 0;
+      }
     }
 
-    createPointerTweens();
+    function refreshTargetRect(now) {
+      if (!targetElement) return;
 
-    function startRotation() {
-      restartTween = null;
-      rotationTween?.kill();
-      gsap.set(wrapper, { rotation: 0 });
-      rotationTween = gsap.to(wrapper, {
-        rotation: 360,
-        duration: 2,
-        ease: "none",
-        repeat: -1,
-      });
-    }
-
-    function getTargetPositions(rect) {
-      const left = rect.left - OUTSET;
-      const top = rect.top - OUTSET;
-      const right = rect.right + OUTSET - BRACKET_SIZE;
-      const bottom = rect.bottom + OUTSET - BRACKET_SIZE;
-
-      return {
-        tl: { x: left, y: top },
-        tr: { x: right, y: top },
-        br: { x: right, y: bottom },
-        bl: { x: left, y: bottom },
-      };
-    }
-
-    function updateLockedBrackets() {
-      if (!lockedTarget) return;
-      if (!lockedTarget.isConnected) {
-        releaseTarget();
+      if (!targetElement.isConnected) {
+        targetElement = null;
+        targetRect = null;
+        lockedPositions = null;
+        strengthTarget = 0;
         return;
       }
 
-      const rect = lockedTarget.getBoundingClientRect();
-      const positions = getTargetPositions(rect);
-      const parallaxX = (rawPointerX - (rect.left + rect.width / 2)) * 0.2;
-      const parallaxY = (rawPointerY - (rect.top + rect.height / 2)) * 0.2;
-      const strength = lockState.strength;
-      const maxBracketX = Math.max(0, window.innerWidth - BRACKET_SIZE);
-      const maxBracketY = Math.max(0, window.innerHeight - BRACKET_SIZE);
+      targetRect = targetElement.getBoundingClientRect();
+      lastRectRefresh = now;
+    }
 
-      Object.entries(positions).forEach(([key, position]) => {
+    function tick(now) {
+      const deltaSeconds = Math.min(0.05, Math.max(0, (now - lastFrame) / 1000));
+      lastFrame = now;
+      if (needsHitTest && now - lastHitTest >= HIT_TEST_INTERVAL_MS) hitTest(now);
+      if (!idleTested && now - lastMoveAt >= IDLE_TEST_DELAY_MS) {
+        hitTest(now);
+        idleTested = true;
+      }
+
+      const scrolling = now < scrollUntil;
+      if (targetElement && (scrolling || now - lastRectRefresh >= RECT_REFRESH_MS)) {
+        refreshTargetRect(now);
+      }
+
+      const strengthEase = 1 - Math.exp(-deltaSeconds * 22);
+      const rotationEase = 1 - Math.exp(-deltaSeconds * 14);
+      const scaleEase = 1 - Math.exp(-deltaSeconds * 18);
+
+      strength += (strengthTarget - strength) * strengthEase;
+      if (Math.abs(strengthTarget - strength) < 0.002) strength = strengthTarget;
+
+      scale += (scaleTarget - scale) * scaleEase;
+      dotScale += (dotScaleTarget - dotScale) * scaleEase;
+
+      if (targetElement) {
+        // Unwind the idle spin so the brackets line up with the element edges.
+        let normalized = rotation % 360;
+        if (normalized > 180) normalized -= 360;
+        rotation = normalized * (1 - rotationEase);
+        if (Math.abs(rotation) < 0.05) rotation = 0;
+      } else {
+        rotation = (rotation + deltaSeconds * 180) % 360;
+      }
+
+      // Position is applied 1:1 with the pointer: any easing here reads as input lag.
+      const renderX = clamp(pointerX, EDGE_GUTTER, viewportWidth - EDGE_GUTTER);
+      const renderY = clamp(pointerY, EDGE_GUTTER, viewportHeight - EDGE_GUTTER);
+
+      wrapper.style.transform =
+        `translate3d(${renderX.toFixed(2)}px, ${renderY.toFixed(2)}px, 0) ` +
+        `rotate(${rotation.toFixed(2)}deg) scale(${scale.toFixed(3)})`;
+
+      const dotTransform = `scale(${dotScale.toFixed(3)})`;
+      if (dot.style.transform !== dotTransform) dot.style.transform = dotTransform;
+
+      if (targetElement && targetRect) {
+        const left = targetRect.left - OUTSET;
+        const top = targetRect.top - OUTSET;
+        const right = targetRect.right + OUTSET - BRACKET_SIZE;
+        const bottom = targetRect.bottom + OUTSET - BRACKET_SIZE;
+        const parallaxX = (renderX - (targetRect.left + targetRect.width / 2)) * 0.2;
+        const parallaxY = (renderY - (targetRect.top + targetRect.height / 2)) * 0.2;
+        const maxX = Math.max(0, viewportWidth - BRACKET_SIZE);
+        const maxY = Math.max(0, viewportHeight - BRACKET_SIZE);
+
+        lockedPositions = {
+          tl: {
+            x: clamp(left + parallaxX, 0, maxX) - renderX,
+            y: clamp(top + parallaxY, 0, maxY) - renderY,
+          },
+          tr: {
+            x: clamp(right + parallaxX, 0, maxX) - renderX,
+            y: clamp(top + parallaxY, 0, maxY) - renderY,
+          },
+          br: {
+            x: clamp(right + parallaxX, 0, maxX) - renderX,
+            y: clamp(bottom + parallaxY, 0, maxY) - renderY,
+          },
+          bl: {
+            x: clamp(left + parallaxX, 0, maxX) - renderX,
+            y: clamp(bottom + parallaxY, 0, maxY) - renderY,
+          },
+        };
+      }
+
+      for (const key of BRACKET_KEYS) {
         const rest = REST_POSITIONS[key];
-        gsap.set(brackets[key], {
-          x: gsap.utils.interpolate(
-            rest.x,
-            clamp(position.x + parallaxX, 0, maxBracketX) - pointerX,
-            strength,
-          ),
-          y: gsap.utils.interpolate(
-            rest.y,
-            clamp(position.y + parallaxY, 0, maxBracketY) - pointerY,
-            strength,
-          ),
-        });
-      });
-    }
+        const destination = lockedPositions?.[key];
 
-    function lockToTarget(target) {
-      if (!target || target === lockedTarget) return;
+        const x = destination ? rest.x + (destination.x - rest.x) * strength : rest.x;
+        const y = destination ? rest.y + (destination.y - rest.y) * strength : rest.y;
+        const transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0)`;
 
-      restartTween?.kill();
-      restartTween = null;
-      rotationTween?.kill();
-      rotationTween = null;
-      gsap.set(wrapper, { rotation: 0 });
-      gsap.killTweensOf(lockState);
-      lockState.strength = 0;
-      lockedTarget = target;
-      gsap.to(lockState, {
-        strength: 1,
-        duration: 0.2,
-        ease: "power2.out",
-      });
-    }
-
-    function releaseTarget() {
-      if (!lockedTarget) return;
-
-      lockedTarget = null;
-      gsap.killTweensOf(lockState);
-      lockState.strength = 0;
-      Object.entries(REST_POSITIONS).forEach(([key, position]) => {
-        gsap.to(brackets[key], {
-          ...position,
-          duration: 0.3,
-          ease: "power3.out",
-          overwrite: true,
-        });
-      });
-
-      restartTween?.kill();
-      restartTween = gsap.delayedCall(0.35, startRotation);
-    }
-
-    function updatePointer(clientX, clientY) {
-      const reentering = !pointerInside;
-      pointerInside = true;
-      document.body.classList.add("has-cursor");
-      rawPointerX = clientX;
-      rawPointerY = clientY;
-      pointerX = clamp(clientX, EDGE_GUTTER, window.innerWidth - EDGE_GUTTER);
-      pointerY = clamp(clientY, EDGE_GUTTER, window.innerHeight - EDGE_GUTTER);
-
-      if (reentering) {
-        gsap.set(wrapper, {
-          x: pointerX,
-          y: pointerY,
-          rotation: 0,
-          scale: 1,
-          autoAlpha: 1,
-        });
-      } else {
-        gsap.set(wrapper, { autoAlpha: 1 });
-        moveX(pointerX);
-        moveY(pointerY);
+        if (lastBracketTransforms[key] !== transform) {
+          lastBracketTransforms[key] = transform;
+          brackets[key].style.transform = transform;
+        }
       }
 
-      const target = findTargetAtPoint(rawPointerX, rawPointerY);
-      if (target) {
-        lockToTarget(target);
-      } else {
-        releaseTarget();
-        if (!rotationTween && !restartTween) startRotation();
-      }
+      frameHandle = visible ? requestAnimationFrame(tick) : 0;
     }
 
     function handlePointerMove(event) {
       if (event.pointerType === "touch") return;
-      updatePointer(event.clientX, event.clientY);
-    }
 
-    function handlePointerOver(event) {
-      if (event.pointerType === "touch") return;
-      updatePointer(event.clientX, event.clientY);
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      lastMoveAt = performance.now();
+      idleTested = false;
+      needsHitTest = true;
+
+      if (!visible) {
+        setVisible(true);
+        startLoop();
+      }
     }
 
     function handlePointerDown(event) {
       if (event.pointerType === "touch") return;
-      gsap.to(dot, { scale: 0.7, duration: 0.3, overwrite: true });
-      gsap.to(wrapper, { scale: 0.9, duration: 0.2, overwrite: true });
+      scaleTarget = 0.9;
+      dotScaleTarget = 0.7;
+      needsHitTest = true;
     }
 
     function handlePointerUp() {
-      gsap.to(dot, { scale: 1, duration: 0.3, overwrite: true });
-      gsap.to(wrapper, { scale: 1, duration: 0.2, overwrite: true });
+      scaleTarget = 1;
+      dotScaleTarget = 1;
     }
 
     function handleScroll() {
-      if (!lockedTarget) return;
-      if (findTargetAtPoint(rawPointerX, rawPointerY) !== lockedTarget) releaseTarget();
+      scrollUntil = performance.now() + SCROLL_WINDOW_MS;
+      needsHitTest = true;
+      idleTested = false;
     }
 
-    function handleWindowLeave() {
-      if (!pointerInside) return;
-
-      pointerInside = false;
-      document.body.classList.remove("has-cursor");
-      rotationTween?.kill();
-      rotationTween = null;
-      restartTween?.kill();
-      restartTween = null;
-      gsap.killTweensOf([wrapper, dot, ...Object.values(brackets), lockState]);
-      lockState.strength = 0;
-      lockedTarget = null;
-      gsap.set(wrapper, { autoAlpha: 0, rotation: 0, scale: 1 });
-      gsap.set(dot, { scale: 1 });
-      Object.entries(REST_POSITIONS).forEach(([key, position]) => {
-        gsap.set(brackets[key], position);
-      });
-      moveX.tween.kill();
-      moveY.tween.kill();
-      createPointerTweens();
+    function handleResize() {
+      viewportWidth = window.innerWidth;
+      viewportHeight = window.innerHeight;
+      scrollUntil = performance.now() + SCROLL_WINDOW_MS;
+      needsHitTest = true;
+      idleTested = false;
     }
 
-    function handlePointerOut(event) {
-      if (event.relatedTarget === null) handleWindowLeave();
+    function hideCursor() {
+      if (!visible) return;
+
+      setVisible(false);
+      stopLoop();
+      targetElement = null;
+      targetRect = null;
+      lockedPositions = null;
+      strength = 0;
+      strengthTarget = 0;
+      scale = 1;
+      scaleTarget = 1;
+      dotScale = 1;
+      dotScaleTarget = 1;
+      rotation = 0;
+    }
+
+    function handleWindowLeave(event) {
+      if (event.relatedTarget === null) hideCursor();
     }
 
     function handleVisibilityChange() {
-      if (document.visibilityState === "hidden") handleWindowLeave();
+      if (document.visibilityState === "hidden") hideCursor();
     }
 
-    gsap.ticker.add(updateLockedBrackets);
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
-    window.addEventListener("pointerover", handlePointerOver, { passive: true });
+    window.addEventListener("pointerover", handlePointerMove, { passive: true });
     window.addEventListener("pointerdown", handlePointerDown, { passive: true });
     window.addEventListener("pointerup", handlePointerUp, { passive: true });
     window.addEventListener("pointercancel", handlePointerUp, { passive: true });
     window.addEventListener("pointerleave", handleWindowLeave);
-    window.addEventListener("blur", handleWindowLeave);
-    document.addEventListener("pointerout", handlePointerOut);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", hideCursor);
     window.addEventListener("scroll", handleScroll, { passive: true, capture: true });
+    window.addEventListener("resize", handleResize, { passive: true });
+    document.addEventListener("pointerout", handleWindowLeave);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      document.body.classList.remove("has-cursor");
+      cancelAnimationFrame(frameHandle);
       window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerover", handlePointerOver);
+      window.removeEventListener("pointerover", handlePointerMove);
       window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
       window.removeEventListener("pointerleave", handleWindowLeave);
-      window.removeEventListener("blur", handleWindowLeave);
-      document.removeEventListener("pointerout", handlePointerOut);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", hideCursor);
       window.removeEventListener("scroll", handleScroll, true);
-      gsap.ticker.remove(updateLockedBrackets);
-      rotationTween?.kill();
-      restartTween?.kill();
-      moveX.tween.kill();
-      moveY.tween.kill();
-      gsap.killTweensOf([wrapper, dot, ...Object.values(brackets), lockState]);
+      window.removeEventListener("resize", handleResize);
+      document.removeEventListener("pointerout", handleWindowLeave);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.body.classList.remove("has-cursor");
     };
   }, [enabled]);
 
   if (!enabled) return null;
 
   return createPortal(
-    <div aria-hidden="true" className="target-cursor-wrapper" ref={wrapperRef}>
+    <div
+      aria-hidden="true"
+      className="target-cursor-wrapper"
+      ref={wrapperRef}
+      style={{ opacity: 0, visibility: "hidden" }}
+    >
       <span className="target-cursor-dot" ref={dotRef} />
-      <span className="target-cursor-bracket target-cursor-bracket-tl" ref={(node) => { bracketRefs.current.tl = node; }} />
-      <span className="target-cursor-bracket target-cursor-bracket-tr" ref={(node) => { bracketRefs.current.tr = node; }} />
-      <span className="target-cursor-bracket target-cursor-bracket-br" ref={(node) => { bracketRefs.current.br = node; }} />
-      <span className="target-cursor-bracket target-cursor-bracket-bl" ref={(node) => { bracketRefs.current.bl = node; }} />
+      {BRACKET_KEYS.map((key) => (
+        <span
+          className={`target-cursor-bracket target-cursor-bracket-${key}`}
+          key={key}
+          ref={(node) => {
+            bracketRefs.current[key] = node;
+          }}
+        />
+      ))}
     </div>,
     document.body,
   );
