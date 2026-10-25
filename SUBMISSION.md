@@ -67,7 +67,7 @@ The SPA talks only to `/api` on the same origin. Express validates and persists 
 
 - [x] Include the complete GitHub Copilot chat history at `backend/CIVICGAURD.json` (43 requests; metadata in `docs/copilot-evidence.md`).
 - [x] README covers the concept, setup/run instructions and dependencies.
-- [ ] Push this repo to GitHub (`npm run publish`, or the SSH push command).
+- [x] Push this repo to GitHub — https://github.com/rexis67/civicguard (CI passing on `main`).
 - [ ] Deploy to Render with the blueprint in `render.yaml`; set `GEMINI_API_KEY` and a **new** `AUTHORITY_INVITE_CODE`.
 - [ ] Open the deployed URL once, confirm 12 seeded incidents and one new submission.
 - [ ] Email the GitHub repository link (and live demo URL) to **legacydavpv@gmail.com** before **25 October 2026, midnight**.
