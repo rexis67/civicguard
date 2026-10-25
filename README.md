@@ -149,7 +149,7 @@ The repository ships a [`render.yaml`](render.yaml) blueprint:
 3. Fill in `GEMINI_API_KEY` and `AUTHORITY_INVITE_CODE` when prompted.
 4. Deploy. The blueprint provisions a 1 GB disk at `/data`, generates `JWT_SECRET`, and sets `NODE_ENV=production`.
 
-The health check is `GET /api/health`.
+The health check is `GET /api/health`. Because the blueprint provisions no SMTP credentials, it also sets `RETURN_VERIFICATION_LINK=true`: the register dialog hands you the verification link directly so accounts work out of the box. Configure SMTP and flip that to `false` for a real deployment.
 
 > Render's free tier does not support persistent disks. Use the Starter plan, or point `REPORT_IMAGE_STORAGE=s3` and `CIVICGUARD_DB_PATH` at a hosted database if you need a free tier.
 
@@ -188,7 +188,7 @@ All variables are optional except `GEMINI_API_KEY` for AI triage and `JWT_SECRET
 | `PORT` | `5000` | API port |
 | `NODE_ENV` | `development` | Enables production-only safety checks (JWT secret, SMTP, error redaction) |
 | `SERVE_STATIC` | `true` | Serve the built SPA from Express |
-| `FRONTEND_URL` | `http://localhost:5173` | Verification-link base URL; also the default CORS origin |
+| `FRONTEND_URL` | request origin in production, `http://localhost:5173` in dev | Verification-link base URL; also the default CORS origin |
 | `CORS_ORIGINS` | – | Comma-separated additional allowed origins |
 | `API_PUBLIC_BASE_URL` | – (relative `/uploads`) | Absolute base for locally stored image URLs |
 | `GEMINI_API_KEY` | – | Enables AI triage (`503` on submission if unset) |
@@ -197,7 +197,7 @@ All variables are optional except `GEMINI_API_KEY` for AI triage and `JWT_SECRET
 | `JWT_SECRET` | generated in dev | Must be ≥ 32 characters in production |
 | `AUTHORITY_INVITE_CODE` | – | Required for authority self-registration |
 | `AUTHORITY_EMAIL_DOMAINS` | – | Optional domain allowlist that bypasses the invite code |
-| `RETURN_VERIFICATION_LINK` | `true` outside production | Echo the verification URL when SMTP is unavailable |
+| `RETURN_VERIFICATION_LINK` | `true` outside production | Echo the verification URL when SMTP is unavailable (demo mode) |
 | `AUTH_RATE_LIMIT` / `LOGIN_RATE_LIMIT` | `60` / `10` | Auth requests per 15 min per IP |
 | `REPORT_RATE_LIMIT` | `30` | Report submissions per 10 min per IP |
 | `TRUST_PROXY_HOPS` | `1` in production, else `0` | Reverse-proxy depth for correct client IPs |
@@ -228,7 +228,7 @@ This replaced a synchronous call that blocked submissions for up to two minutes.
 - JWTs signed with a 32+ character secret, 8-hour expiry, issuer pinned; every request re-checks that the user still exists, is verified and still holds the claimed role.
 - Email verification tokens are random 32-byte values, stored only as SHA-256 hashes, single-use with a 24-hour TTL.
 - Authority registration requires the invite code or an explicitly allowlisted email domain — an address ending in `.gov` is **not** sufficient.
-- The verification link is only echoed in API responses outside production, or when `RETURN_VERIFICATION_LINK=true` is set deliberately.
+- The verification link is only echoed in API responses outside production, or when `RETURN_VERIFICATION_LINK=true` is set deliberately. If no SMTP is configured and echoing is off, registration fails with a clear `503` instead of creating an account that can never be activated.
 - Rate limits on auth (per IP, tighter on login) and on report submission, which also protects the Gemini quota.
 - Image uploads are restricted to a MIME allowlist (PNG, JPEG, WebP, GIF, AVIF, HEIC/HEIF), 10 MB max, stored under UUID filenames.
 - `helmet` sets CSP, HSTS, `X-Frame-Options`, `nosniff` and a no-referrer policy; CORS is restricted to configured origins.
@@ -239,7 +239,7 @@ This replaced a synchronous call that blocked submissions for up to two minutes.
 
 - [ ] `JWT_SECRET` and `AUTHORITY_INVITE_CODE` set to long random values
 - [ ] `NODE_ENV=production`, `RETURN_VERIFICATION_LINK` unset or `false`
-- [ ] SMTP configured (or verification intentionally unavailable)
+- [ ] SMTP configured, or `RETURN_VERIFICATION_LINK=true` left on for a demo (turn it off once SMTP works)
 - [ ] `CORS_ORIGINS` set if the API is on a different origin
 - [ ] Volume mounted at `/data`
 - [ ] `TRUST_PROXY_HOPS` matches your proxy

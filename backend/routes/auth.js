@@ -123,12 +123,24 @@ function hashVerificationToken(token) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function verificationLink(token) {
-  const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
-  return `${frontendUrl}/?verifyEmail=${encodeURIComponent(token)}`;
+function resolveFrontendOrigin(request) {
+  const configured = (process.env.FRONTEND_URL ?? "").replace(/\/$/, "");
+  if (configured) return configured;
+
+  // Same-origin deployments (Express serves the SPA) should link back to
+  // whatever hostname the request arrived on, e.g. https://civicguard.onrender.com.
+  if (process.env.NODE_ENV === "production" && request) {
+    return `${request.protocol}://${request.get("host")}`;
+  }
+
+  return "http://localhost:5173";
 }
 
-async function issueVerification(user, existingTokenHash = null) {
+function verificationLink(token, request) {
+  return `${resolveFrontendOrigin(request)}/?verifyEmail=${encodeURIComponent(token)}`;
+}
+
+async function issueVerification(user, existingTokenHash = null, request = null) {
   const rawToken = randomBytes(32).toString("base64url");
   const tokenHash = hashVerificationToken(rawToken);
   const expiresAt = Date.now() + VERIFICATION_TTL_MS;
@@ -140,17 +152,29 @@ async function issueVerification(user, existingTokenHash = null) {
     await setEmailVerification(user.id, tokenHash, expiresAt);
   }
 
-  const url = verificationLink(rawToken);
+  const url = verificationLink(rawToken, request);
   const delivery = await sendVerificationEmail({
     email: user.email,
     name: user.name,
     verificationUrl: url,
   });
+  const exposeLink = !delivery.delivered && shouldReturnVerificationLink();
+
+  if (!delivery.delivered && !exposeLink) {
+    const error = new Error(
+      "Email verification is not configured on this deployment, so the account cannot be activated yet. Contact the deployment administrator.",
+    );
+    error.statusCode = 503;
+    error.expose = true;
+    throw error;
+  }
 
   return {
     verificationRequired: true,
-    message: "Check your email for a verification link. The link expires in 24 hours.",
-    ...(delivery.delivered || !shouldReturnVerificationLink() ? {} : { verificationUrl: url }),
+    message: exposeLink
+      ? "Email delivery is unavailable on this deployment. Use the direct verification link below to activate your account."
+      : "Check your email for a verification link. The link expires in 24 hours.",
+    ...(exposeLink ? { verificationUrl: url } : {}),
   };
 }
 
@@ -190,7 +214,7 @@ router.post("/register", async (request, response, next) => {
     const existingUser = await getUserByEmail(normalizedEmail);
     if (existingUser) {
       if (!existingUser.emailVerified) {
-        const verification = await issueVerification(existingUser, "refresh");
+        const verification = await issueVerification(existingUser, "refresh", request);
         response.status(202).json(verification ?? {
           verificationRequired: true,
           message: "If the account is eligible, a verification link will be sent.",
@@ -213,7 +237,7 @@ router.post("/register", async (request, response, next) => {
     });
 
     try {
-      response.status(201).json(await issueVerification(user));
+      response.status(201).json(await issueVerification(user, null, request));
     } catch (error) {
       await deleteUnverifiedUser(user.id);
       throw error;
@@ -261,7 +285,7 @@ router.post("/resend-verification", async (request, response, next) => {
       return;
     }
 
-    const verification = await issueVerification(user, "refresh");
+    const verification = await issueVerification(user, "refresh", request);
     response.json(verification ?? {
       message: "If the account needs verification, a new link will be sent.",
     });

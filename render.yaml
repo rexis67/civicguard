@@ -19,8 +19,10 @@ services:
         sync: false
       - key: AUTHORITY_EMAIL_DOMAINS
         value: ""
+      # No SMTP is provisioned by this blueprint, so registration hands the
+      # verification link back to the browser. Set to false once SMTP is set.
       - key: RETURN_VERIFICATION_LINK
-        value: "false"
+        value: "true"
       - key: CIVICGUARD_DB_PATH
         value: /data/civicguard.sqlite
       - key: CIVICGUARD_REPORTS_PATH

@@ -26,10 +26,9 @@ function getTransporter() {
 export async function sendVerificationEmail({ email, name, verificationUrl }) {
   const mailer = getTransporter();
   if (!mailer) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("Email verification delivery is not configured. Set the SMTP environment variables.");
-    }
-    return { delivered: false };
+    // No SMTP is configured. Callers decide whether to expose the link or fail
+    // with a clear configuration error instead of pretending an email was sent.
+    return { delivered: false, configured: false };
   }
 
   await mailer.sendMail({

@@ -356,6 +356,12 @@ app.use((error, _request, response, _next) => {
     return;
   }
 
+  // Deliberate, safe-to-expose configuration errors (e.g. missing SMTP).
+  if (error.expose === true && Number.isInteger(error.statusCode)) {
+    response.status(error.statusCode).json({ error: error.message });
+    return;
+  }
+
   const isMissingApiKey =
     typeof error.message === "string" &&
     error.message.includes("GEMINI_API_KEY is not configured");
@@ -383,6 +389,11 @@ async function startServer() {
     console.log(
       `Serving ${servesStaticBuild ? `built frontend from ${distDirectory}` : "API only (no dist/ build found)"}`,
     );
+    if (!process.env.SMTP_HOST) {
+      console.warn(
+        "[mail] SMTP is not configured. Verification emails cannot be delivered; registration only works when RETURN_VERIFICATION_LINK allows the link to be shown.",
+      );
+    }
   });
 
   const shutdown = (signal) => {

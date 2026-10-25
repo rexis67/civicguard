@@ -118,7 +118,9 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
             <div className="space-y-3 rounded-lg border border-mint/20 bg-mint/10 p-4 text-sm text-ink" role="status">
               <p className="font-semibold text-mint">Verify your email to activate your account.</p>
               <p className="text-muted">
-                We sent a verification link to {email}. The link expires in 24 hours.
+                {verificationInfo.verificationUrl
+                  ? "Email delivery is not configured on this deployment, so use the direct link below to activate your account. It expires in 24 hours."
+                  : `We sent a verification link to ${email}. The link expires in 24 hours.`}
               </p>
               {verificationInfo.verificationUrl && (
                 <a
