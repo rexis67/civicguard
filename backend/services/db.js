@@ -67,9 +67,33 @@ async function initializeReportsFile() {
     return;
   }
 
-  const savedReports = JSON.parse(fileContents);
+  let savedReports;
+  try {
+    savedReports = JSON.parse(fileContents);
+  } catch (error) {
+    // A half-written or otherwise corrupted store must never keep the server
+    // from booting (e.g. on hosts that kill containers abruptly). Preserve the
+    // unreadable file for inspection, then start from an empty store; the
+    // SEED_DEMO_DATA bootstrap repopulates it on the next boot.
+    const backupFile = `${reportsFile}.corrupt-${Date.now()}`;
+    await rename(reportsFile, backupFile).catch(() => {});
+    console.warn(
+      `[db] ${reportsFile} could not be parsed (${error.message}); moved it to ${backupFile} and starting with an empty report store.`,
+    );
+    reports = [];
+    await writeReportsAtomically(reports);
+    return;
+  }
+
   if (!Array.isArray(savedReports)) {
-    throw new TypeError("backend/reports.json must contain a JSON array.");
+    const backupFile = `${reportsFile}.invalid-${Date.now()}`;
+    await rename(reportsFile, backupFile).catch(() => {});
+    console.warn(
+      `[db] ${reportsFile} did not contain a JSON array; moved it to ${backupFile} and starting with an empty report store.`,
+    );
+    reports = [];
+    await writeReportsAtomically(reports);
+    return;
   }
 
   reports = savedReports;
