@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: civicguard
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_STATIC
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AUTHORITY_INVITE_CODE
+        sync: false
+      - key: AUTHORITY_EMAIL_DOMAINS
+        value: ""
+      - key: RETURN_VERIFICATION_LINK
+        value: "false"
+      - key: CIVICGUARD_DB_PATH
+        value: /data/civicguard.sqlite
+      - key: CIVICGUARD_REPORTS_PATH
+        value: /data/reports.json
+      - key: UPLOAD_DIR
+        value: /data/uploads
+    disk:
+      name: civicguard-data
+      mountPath: /data
+      sizeGB: 1

@@ -1,0 +1,17 @@
+node_modules
+**/node_modules
+dist
+.git
+.github
+archive
+**/.env
+**/.env.*
+!backend/.env.example
+backend/*.sqlite
+backend/*.sqlite-shm
+backend/*.sqlite-wal
+backend/reports.json
+backend/.jwt-secret
+backend/uploads
+*.log
+README.md
