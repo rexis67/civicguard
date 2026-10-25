@@ -65,7 +65,15 @@ The SPA talks only to `/api` on the same origin. Express validates and persists 
 
 ## Submission checklist
 
-- [ ] Push this repo to GitHub (`npm run publish`).
-- [ ] Deploy to Render with the blueprint in `render.yaml`; set `GEMINI_API_KEY` and `AUTHORITY_INVITE_CODE`.
+- [x] Include the complete GitHub Copilot chat history at `backend/CIVICGAURD.json` (43 requests; metadata in `docs/copilot-evidence.md`).
+- [x] README covers the concept, setup/run instructions and dependencies.
+- [ ] Push this repo to GitHub (`npm run publish`, or the SSH push command).
+- [ ] Deploy to Render with the blueprint in `render.yaml`; set `GEMINI_API_KEY` and a **new** `AUTHORITY_INVITE_CODE`.
 - [ ] Open the deployed URL once, confirm 12 seeded incidents and one new submission.
-- [ ] Paste the repo URL and live URL into the hackathon form.
+- [ ] Email the GitHub repository link (and live demo URL) to **legacydavpv@gmail.com** before **25 October 2026, midnight**.
+
+## Submission notes
+
+- The brochure asks for the complete Copilot chat history in the repository; the export is tracked at `backend/CIVICGAURD.json` and described in `docs/copilot-evidence.md`.
+- The brochure also requires participants to be able to explain and justify every part of the project. Be ready to walk through the auth flow (`backend/routes/auth.js`), AI triage (`backend/services/geminiService.js`), the report store (`backend/services/db.js`) and the React state flow (`src/App.jsx`). `README.md` has the architecture and API reference.
+- The submission is the GitHub repository link sent by email; the live URL is supporting evidence, not a replacement for the repo.

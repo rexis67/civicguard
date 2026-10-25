@@ -22,6 +22,7 @@ Built with React + Vite on the front and Express + SQLite on the back, shipped a
 - [API reference](#api-reference)
 - [Project structure](#project-structure)
 - [Testing](#testing)
+- [Hackathon evidence](#hackathon-evidence)
 - [Known limitations](#known-limitations)
 - [License](#license)
 
@@ -287,6 +288,7 @@ This replaced a synchronous call that blocked submissions for up to two minutes.
 ```
 .
 ├── backend/
+│   ├── CIVICGAURD.json         # required Copilot chat export (43 requests)
 │   ├── middleware/auth.js      # JWT verification + role guard
 │   ├── routes/auth.js          # register / login / verification
 │   ├── services/db.js          # SQLite users + JSON report store
@@ -302,6 +304,7 @@ This replaced a synchronous call that blocked submissions for up to two minutes.
 │   └── App.jsx
 ├── scripts/smoke.mjs           # end-to-end API checks (CI)
 ├── scripts/seed.mjs            # demo incident set with pre-computed triage
+├── docs/copilot-evidence.md    # export metadata, hash and redactions
 ├── Dockerfile
 ├── render.yaml
 └── .github/workflows/ci.yml
@@ -315,12 +318,18 @@ npm run test:smoke
 
 Boots the API against a throwaway data directory and asserts 32 behaviours: health, auth lifecycle, invite-gated authority registration, `.gov` escalation rejection, password-gated verification-link reissue, CORS allow/deny, `robots.txt` and `sitemap.xml`, publish-without-waiting triage, host-independent image URLs, MIME rejection, overlong input rejection, role-guarded status updates and deletes, invalid input handling and JSON 404s. CI runs the same suite on every push along with a production build.
 
+## Hackathon evidence
+
+The **LEGACY 8.0** hackathon requires the complete GitHub Copilot chat history as a JSON file. The export used to build CivicGuard is committed at [`backend/CIVICGAURD.json`](backend/CIVICGAURD.json) — **43 Copilot requests** from the 24–25 October 2026 build session.
+
+See [`docs/copilot-evidence.md`](docs/copilot-evidence.md) for the export metadata, SHA-256 integrity hash, verification commands and the three credentials/personal identifiers redacted before publication. No live API keys, tokens, password hashes or production invite codes are in the repository.
+
 ## Known limitations
 
 - Reports are stored as a JSON document, not in SQLite: fine for a demo-scale deployment, not for concurrent multi-instance scaling.
 - Status changes do not yet record an audit trail (actor, timestamp, note).
 - Email verification is required, so a deployment without SMTP cannot onboard users unless `RETURN_VERIFICATION_LINK` is enabled.
-- No automated UI tests; the Playwright dependency is reserved for that work.
+- No automated UI tests in CI; Playwright checks for layout, modal accessibility and form submission were run manually.
 - AI triage depends on the Gemini free-tier quota (20 reports/day for `gemini-3.8-flash`); exhausted quota degrades gracefully to manual review.
 
 ## License

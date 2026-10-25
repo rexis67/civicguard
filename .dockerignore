@@ -12,6 +12,7 @@ backend/*.sqlite-shm
 backend/*.sqlite-wal
 backend/reports.json
 backend/reports.json.tmp
+backend/CIVICGAURD.json
 backend/users.json
 backend/users.json.tmp
 backend/users.json.migrated

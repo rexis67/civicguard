@@ -16,8 +16,8 @@ backend/*.sqlite-wal
 backend/uploads/
 backend/users.json.migrated
 
-# Scratch exports (chat transcripts, dumps, archives)
-backend/CIVICGAURD.json
+# Scratch exports (dumps, archives)
+# The hackathon-required Copilot export is tracked at backend/CIVICGAURD.json.
 *.zip
 
 # Logs and OS noise
