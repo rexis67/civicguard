@@ -10,6 +10,13 @@ function requestError(message, response) {
   return error;
 }
 
+function failureMessage(response, fallback) {
+  if ([502, 503, 504].includes(response.status)) {
+    return `The CivicGuard API is unreachable (HTTP ${response.status}). Check that the backend is running, then try again.`;
+  }
+  return fallback ?? `The request failed with status ${response.status}.`;
+}
+
 async function postAuthRequest(path, credentials) {
   const response = await fetch(`${API_URL}/auth/${path}`, {
     method: "POST",
@@ -19,7 +26,7 @@ async function postAuthRequest(path, credentials) {
 
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw requestError(result.error ?? `Authentication failed (${response.status}).`, response);
+    throw requestError(result.error ?? failureMessage(response, `Authentication failed (${response.status}).`), response);
   }
 
   return result;
@@ -47,7 +54,7 @@ export async function getReports() {
     if (!response.ok) {
       const details = await response.json().catch(() => null);
       throw requestError(
-        details?.error ?? `The reports request failed with status ${response.status}.`,
+        details?.error ?? failureMessage(response),
         response,
       );
     }
@@ -70,7 +77,7 @@ export async function createReport(formData) {
     if (!response.ok) {
       const details = await response.json().catch(() => null);
       throw requestError(
-        details?.error ?? `The report request failed with status ${response.status}.`,
+        details?.error ?? failureMessage(response),
         response,
       );
     }
@@ -97,7 +104,7 @@ export async function updateReportStatus(id, status, token) {
     if (!response.ok) {
       const details = await response.json().catch(() => null);
       throw requestError(
-        details?.error ?? `The status update failed with status ${response.status}.`,
+        details?.error ?? failureMessage(response),
         response,
       );
     }
@@ -120,7 +127,7 @@ export async function deleteReport(id, token) {
     if (!response.ok) {
       const details = await response.json().catch(() => null);
       throw requestError(
-        details?.error ?? `The report deletion failed with status ${response.status}.`,
+        details?.error ?? failureMessage(response),
         response,
       );
     }
