@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import cors from "cors";
@@ -21,6 +22,7 @@ import {
 } from "./services/db.js";
 import { analyzeIssueReport } from "./services/geminiService.js";
 import { getJwtSecret } from "./services/jwtSecret.js";
+import { getPublicSiteUrl } from "./services/siteUrl.js";
 import {
   deleteStoredImage,
   ensureImageStorageReady,
@@ -52,10 +54,34 @@ if (Number.isInteger(trustProxyHops) && trustProxyHops > 0) {
   app.set("trust proxy", trustProxyHops);
 }
 
-const allowedOrigins = (process.env.CORS_ORIGINS ?? process.env.FRONTEND_URL ?? "")
-  .split(",")
-  .map((origin) => origin.trim().replace(/\/$/, ""))
+const allowedOrigins = [
+  process.env.CORS_ORIGINS,
+  process.env.FRONTEND_URL,
+  process.env.PUBLIC_SITE_URL,
+  process.env.RENDER_EXTERNAL_URL,
+]
+  .flatMap((value) => (value ?? "").split(","))
+  .map((value) => originOf(value))
   .filter(Boolean);
+
+const uniqueAllowedOrigins = [...new Set(allowedOrigins)];
+
+function originOf(value) {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+// Local images use relative URLs; S3 (or a CDN) needs its origin in the CSP.
+const imageOrigins = [
+  ...new Set(
+    [process.env.S3_PUBLIC_BASE_URL, process.env.API_PUBLIC_BASE_URL]
+      .map(originOf)
+      .filter(Boolean),
+  ),
+];
 
 app.use(
   helmet({
@@ -64,9 +90,9 @@ app.use(
           directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-            fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-            imgSrc: ["'self'", "data:", "blob:", "https:"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            fontSrc: ["'self'", "data:"],
+            imgSrc: ["'self'", "data:", "blob:", ...imageOrigins],
             connectSrc: ["'self'"],
             objectSrc: ["'none'"],
             frameAncestors: ["'none'"],
@@ -83,12 +109,27 @@ app.use(
   cors({
     origin(origin, callback) {
       // Same-origin requests and server-to-server calls have no Origin header.
-      if (!origin || allowedOrigins.length === 0) return callback(null, true);
-      return callback(null, allowedOrigins.includes(origin.replace(/\/$/, "")));
+      if (!origin) return callback(null, true);
+      return callback(null, uniqueAllowedOrigins.includes(origin.replace(/\/$/, "")));
     },
   }),
 );
+
+app.use((_request, response, next) => {
+  response.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  );
+  next();
+});
+
 app.use(express.json({ limit: "1mb" }));
+
+// API responses can contain tokens, reports and user data; never cache them.
+app.use("/api", (_request, response, next) => {
+  response.set("Cache-Control", "no-store");
+  next();
+});
 
 if (getImageStorageMode() === "local") {
   app.use("/uploads", express.static(getUploadsDirectory(), { immutable: true, maxAge: "1y" }));
@@ -361,11 +402,79 @@ app.use("/api", (_request, response) => {
   response.status(404).json({ error: "Route not found." });
 });
 
+function getSiteOrigin() {
+  return getPublicSiteUrl() ?? `http://localhost:${process.env.PORT ?? "5000"}`;
+}
+
+app.get("/robots.txt", (_request, response) => {
+  response.type("text/plain").send(
+    [
+      "User-agent: *",
+      "Allow: /",
+      "Disallow: /api/",
+      "Disallow: /uploads/",
+      "",
+      `Sitemap: ${getSiteOrigin()}/sitemap.xml`,
+      "",
+    ].join("\n"),
+  );
+});
+
+app.get("/sitemap.xml", (_request, response) => {
+  const origin = getSiteOrigin();
+  const xmlEscape = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;");
+  const pages = [
+    { path: "/", changefreq: "weekly", priority: "1.0" },
+    { path: "/privacy.html", changefreq: "yearly", priority: "0.3" },
+    { path: "/terms.html", changefreq: "yearly", priority: "0.3" },
+  ];
+  const urls = pages
+    .map(
+      (page) =>
+        `  <url><loc>${xmlEscape(`${origin}${page.path}`)}</loc><lastmod>2026-10-25</lastmod><changefreq>${page.changefreq}</changefreq><priority>${page.priority}</priority></url>`,
+    )
+    .join("\n");
+
+  response.type("application/xml").send(
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
+  );
+});
+
+function loadIndexTemplate() {
+  // Re-read on each request so a local rebuild is picked up without a restart;
+  // the file is ~2 KB and served with no-cache.
+  return readFile(path.join(distDirectory, "index.html"), "utf8");
+}
+
+async function sendIndex(_request, response, next) {
+  try {
+    const template = await loadIndexTemplate();
+    const origin = getPublicSiteUrl();
+    const html = template.replaceAll("__PUBLIC_ORIGIN__", origin ?? "");
+    response.set("Cache-Control", "no-cache").type("html").send(html);
+  } catch (error) {
+    next(error);
+  }
+}
+
 if (servesStaticBuild) {
-  app.use(express.static(distDirectory, { index: false, maxAge: "1h" }));
-  app.get("*", (_request, response) => {
-    response.sendFile(path.join(distDirectory, "index.html"));
-  });
+  app.use(
+    express.static(distDirectory, {
+      index: false,
+      maxAge: "1h",
+      setHeaders(response, filePath) {
+        if (
+          filePath.includes(`${path.sep}assets${path.sep}`) ||
+          filePath.includes(`${path.sep}fonts${path.sep}`)
+        ) {
+          response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        } else if (filePath.endsWith(".html")) {
+          response.setHeader("Cache-Control", "no-cache");
+        }
+      },
+    }),
+  );
+  app.get("*", sendIndex);
 } else {
   app.use((_request, response) => {
     response.status(404).json({ error: "Route not found." });

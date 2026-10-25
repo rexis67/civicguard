@@ -130,6 +130,7 @@ export default function AdminDashboard({ onNotify }) {
   useEffect(() => {
     let cancelled = false;
     let requestInFlight = false;
+    let intervalId = 0;
 
     async function loadReports() {
       if (requestInFlight) return;
@@ -158,11 +159,34 @@ export default function AdminDashboard({ onNotify }) {
       }
     }
 
+    function startPolling() {
+      if (intervalId) return;
+      intervalId = window.setInterval(loadReports, REFRESH_INTERVAL_MS);
+    }
+
+    function stopPolling() {
+      if (!intervalId) return;
+      window.clearInterval(intervalId);
+      intervalId = 0;
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        loadReports();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    }
+
     loadReports();
-    const intervalId = window.setInterval(loadReports, REFRESH_INTERVAL_MS);
+    if (document.visibilityState === "visible") startPolling();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refreshKey]);
 
@@ -338,25 +362,25 @@ export default function AdminDashboard({ onNotify }) {
             <table className="min-w-full divide-y divide-white/[0.06] text-left">
               <thead className="bg-deep/60">
                 <tr>
-                  <th className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
+                  <th scope="col" className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
                     Issue
                   </th>
-                  <th className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
+                  <th scope="col" className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
                     Urgency
                   </th>
-                  <th className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
+                  <th scope="col" className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
                     Severity
                   </th>
-                  <th className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
+                  <th scope="col" className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
                     Submitted
                   </th>
-                  <th className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
+                  <th scope="col" className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
                     Status
                   </th>
-                  <th className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
+                  <th scope="col" className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
                     Update status
                   </th>
-                  <th className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
+                  <th scope="col" className="px-5 py-3 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
                     Remove
                   </th>
                 </tr>

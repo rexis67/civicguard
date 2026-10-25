@@ -22,9 +22,9 @@ Municipal issues arrive through phone lines, email, social media and walk-ins, e
 
 ## Why it stands out
 
-- **One deployable service.** Express serves the API, the SPA and uploaded images behind one URL. No CORS, no second host, no static-site/API drift.
+- **One deployable service.** Express serves the API, the SPA and uploaded images behind one URL. No cross-origin setup, no second host, no static-site/API drift.
 - **Asynchronous AI with graceful degradation.** A slow or failed model call never blocks a citizen or loses a report: the card shows *Analyzing* → *Manual review*, and staff can still work it.
-- **Designed for the failure case.** Server-side input caps, MIME allowlist, rate limits, invite-gated authority signup, CSP/helmet, atomic JSON writes, timing-safe invite comparison, JSON 404s for `/api`.
+- **Designed for the failure case.** Server-side input caps, MIME allowlist, rate limits, invite-gated authority signup, password-gated verification-link reissue, deny-by-default CORS, CSP/helmet, atomic JSON writes, timing-safe invite comparison, JSON 404s for `/api`.
 - **Demo without quota.** `SEED_DEMO_DATA=true` loads 12 realistic incidents with pre-computed triage into an empty volume on first boot — the live demo is never empty and needs no AI calls.
 - **Fast where it matters.** Custom cursor rewritten to 1:1 rAF tracking (zero layout reads per pointer event), photo downscaling before upload, newest-first feed, 5-second sync with in-flight request de-duplication.
 
@@ -41,7 +41,7 @@ The SPA talks only to `/api` on the same origin. Express validates and persists 
 1. **Open the feed.** 12 incidents, newest first, with severity bars, urgency badges and districts. Point out the *Auto-sync · 5 sec* indicator.
 2. **Filter.** Click *Pothole*, then pick *Critical* urgency — the list narrows instantly, client-side.
 3. **Submit a report.** Fill in a title and description, attach a photo, submit. It appears immediately with an **Analyzing** badge while triage runs. (With a live key it resolves in ~90 s; with the seeded data the triage state is already populated.)
-4. **Sign in as authority.** Sign in with the invite code used at registration (verification link is returned in the response when SMTP is absent). Open *Admin Incident Ops*: totals, critical count, resolution rate.
+4. **Sign in as authority.** Sign in with the invite code used at registration. With no SMTP configured, the verification link is returned only after the same password is submitted again. Open *Admin Incident Ops*: totals, critical count, resolution rate.
 5. **Close the loop.** Move an incident to *In Progress*, then *Resolved* — the public card reflects it on the next sync. Export the CSV.
 
 ## Judge Q&A
@@ -50,18 +50,18 @@ The SPA talks only to `/api` on the same origin. Express validates and persists 
 
 **What happens when Gemini is down?** `analysisStatus: failed`, the card says *Manual review*, and the report is fully usable. The smoke suite asserts the request returns 201 without waiting for triage.
 
-**How do you stop bad input?** 4,000-char description cap, 120-char title, 10 MB image limit, MIME allowlist, rate limits per IP, and Zod-like shape checks before anything reaches storage.
+**How do you stop bad input?** 4,000-char description cap, 120-char title, 10 MB image limit, MIME allowlist, rate limits per IP, and explicit type/shape checks before anything reaches storage.
 
 **Can it scale?** The JSON store is deliberate for demo size and atomic writes. The seam is `backend/services/db.js` — swap for Postgres without touching routes. Images already support S3.
 
-**Accessibility?** Semantic landmarks, labelled inputs, `aria-live` status regions, keyboard-reachable controls, visible focus rings, and the custom cursor is disabled for touch, narrow screens and `prefers-reduced-motion`.
+**Accessibility?** Semantic landmarks, labelled inputs, `aria-live` status regions, keyboard-reachable controls, visible focus rings, a skip link, modal Escape/focus trap, and a custom cursor disabled for touch, narrow screens and `prefers-reduced-motion`. Fonts are self-hosted, and there is no analytics or third-party tracking; privacy and terms pages are linked in the footer.
 
 ## Known limitations
 
 - Single-instance report store (JSON); horizontal scaling needs Postgres.
 - AI triage is text + first image only, English.
 - No duplicate clustering yet; nearby duplicates are a natural next step.
-- No SMTP in the demo blueprint, so the verification link is echoed in the response. Turn `RETURN_VERIFICATION_LINK` off once mail is configured.
+- No SMTP in the demo blueprint, so the verification link is echoed only after the account password is proved. Turn `RETURN_VERIFICATION_LINK` off once mail is configured.
 
 ## Submission checklist
 

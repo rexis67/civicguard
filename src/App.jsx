@@ -12,6 +12,24 @@ const tabs = [
   { id: "admin", label: "Admin Incident Ops", shortLabel: "Admin Ops" },
 ];
 
+const PAGE_META = {
+  form: {
+    title: "Report an Issue — CivicGuard",
+    description:
+      "Report a pothole, broken streetlight, accessibility blocker or sanitation issue to your municipality. AI triage runs in the background.",
+  },
+  feed: {
+    title: "Live Incident Feed — CivicGuard",
+    description:
+      "Browse live municipal incident reports with AI-assigned category, severity and urgency. Updated every five seconds.",
+  },
+  admin: {
+    title: "Incident Operations — CivicGuard",
+    description:
+      "Authority operations dashboard for triaging municipal incidents, updating status and exporting reports.",
+  },
+};
+
 function PermissionBanner({ user, onOpenLogin, onReturnToFeed }) {
   return (
     <section
@@ -99,6 +117,13 @@ export default function App() {
   }, [toast]);
 
   useEffect(() => {
+    const meta = PAGE_META[activeTab] ?? PAGE_META.feed;
+    document.title = meta.title;
+    const description = document.querySelector('meta[name="description"]');
+    if (description) description.setAttribute("content", meta.description);
+  }, [activeTab]);
+
+  useEffect(() => {
     const currentUrl = new URL(window.location.href);
     const verificationToken = currentUrl.searchParams.get("verifyEmail");
     if (!verificationToken) return undefined;
@@ -153,6 +178,12 @@ export default function App() {
         </div>
       )}
       <main className="flex min-h-screen flex-col bg-canvas font-sans text-ink">
+      <a
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-cyan focus:px-4 focus:py-2 focus:font-mono focus:text-xs focus:font-semibold focus:text-[#06202a]"
+        href="#main-content"
+      >
+        Skip to main content
+      </a>
       <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-canvas/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1720px] flex-col gap-4 px-4 py-3 sm:px-6 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between lg:gap-5 lg:px-8">
           <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-3">
@@ -209,12 +240,12 @@ export default function App() {
               })}
             </nav>
 
-            <div className="flex items-center justify-between gap-5 sm:justify-end">
+            <div className="flex items-center justify-between gap-3 sm:justify-end sm:gap-5">
               <div className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-panel px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted">
                 <span className={`h-1.5 w-1.5 rounded-full ${user?.role === "authority" ? "bg-cyan" : user ? "bg-mint" : "bg-muted"}`} />
                 {roleLabel}
               </div>
-              <div className="hidden border-l border-white/10 pl-5 text-right sm:block">
+              <div className="hidden border-l border-white/10 pl-5 text-right xl:block">
                 <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted">
                   Municipal response
                 </p>
@@ -247,7 +278,7 @@ export default function App() {
                 </button>
               ) : (
                 <button
-                  className="rounded border border-cyan/30 bg-cyan/10 px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-wide text-cyan hover:bg-cyan/15"
+                  className="whitespace-nowrap rounded border border-cyan/30 bg-cyan/10 px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-wide text-cyan hover:bg-cyan/15"
                   onClick={() => setIsAuthModalOpen(true)}
                   type="button"
                 >
@@ -259,7 +290,7 @@ export default function App() {
         </div>
       </header>
 
-      <div className="w-full flex-1 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="w-full flex-1 px-4 py-6 sm:px-6 lg:px-8" id="main-content">
         {activeTab === "form" ? (
           <ReportForm onSubmit={() => showToast("Report submitted. AI triage is running.")} />
         ) : activeTab === "feed" ? (
@@ -288,6 +319,22 @@ export default function App() {
       <footer className="border-t border-white/[0.06] bg-deep/70 px-4 py-3 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-[1720px] flex-col gap-2 font-mono text-[9px] uppercase tracking-[0.1em] text-muted sm:flex-row sm:items-center sm:justify-between">
           <span>Municipal incident intelligence</span>
+          <nav aria-label="Legal and project links" className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <a className="normal-case tracking-normal transition hover:text-ink" href="/privacy.html">
+              Privacy
+            </a>
+            <a className="normal-case tracking-normal transition hover:text-ink" href="/terms.html">
+              Terms
+            </a>
+            <a
+              className="normal-case tracking-normal transition hover:text-ink"
+              href="https://github.com/rexis67/civicguard/issues"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Contact
+            </a>
+          </nav>
           <span className="inline-flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-full bg-mint" />
             Secure civic reporting portal

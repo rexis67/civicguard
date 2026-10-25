@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1326" />
+    <meta
+      name="description"
+      content="How CivicGuard handles report content, account details and AI triage data."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Privacy Policy — CivicGuard</title>
+    <style>
+      @font-face {
+        font-family: "Geist";
+        font-style: normal;
+        font-weight: 300 700;
+        font-display: swap;
+        src: url("/fonts/geist-latin.woff2") format("woff2");
+      }
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #0b1326;
+        color: #dae2fd;
+        font-family: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: #4cd7f6; }
+      a:hover { color: #4edea3; }
+      .shell { max-width: 780px; margin: 0 auto; padding: 32px 20px 64px; }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: #dae2fd;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 20px;
+        letter-spacing: -0.02em;
+      }
+      .brand svg { width: 30px; height: 30px; color: #4cd7f6; }
+      .brand span { color: #4cd7f6; }
+      .eyebrow {
+        margin: 42px 0 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #4cd7f6;
+      }
+      h1 { margin: 8px 0 8px; font-size: clamp(30px, 5vw, 42px); line-height: 1.1; letter-spacing: -0.03em; }
+      h2 { margin: 34px 0 10px; font-size: 19px; letter-spacing: -0.01em; }
+      p, li { color: #b9c6e2; font-size: 15px; }
+      ul { padding-left: 20px; }
+      li { margin: 6px 0; }
+      .meta { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #7f8fae; }
+      .card {
+        margin-top: 26px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 12px;
+        background: #111b31;
+        padding: 18px 20px;
+      }
+      .card p { margin: 0; }
+      footer {
+        margin-top: 48px;
+        border-top: 1px solid rgba(255, 255, 255, 0.09);
+        padding-top: 18px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        color: #7f8fae;
+      }
+      footer a { color: #9fb0d0; text-decoration: none; }
+      footer a:hover { color: #dae2fd; }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <a class="brand" href="/">
+        <svg fill="none" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M16 3.5 27 8v7.2c0 6.2-4.4 11.4-11 13.3C10.4 26.6 6 21.4 6 15.2V8l10-4.5Z" stroke="currentColor" stroke-width="2" />
+          <path d="m11.5 15.5 3 3 6-6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+        </svg>
+        Civic<span>Guard</span>
+      </a>
+
+      <p class="eyebrow">Legal / privacy</p>
+      <h1>Privacy Policy</h1>
+      <p class="meta">Last updated: 25 October 2026</p>
+
+      <div class="card">
+        <p>
+          CivicGuard is an open-source demonstration deployment. Please do not submit
+          confidential information, personal identification documents or anything you would not
+          want publicly visible. Reports and attached photos appear in the public incident feed.
+        </p>
+      </div>
+
+      <h2>What we collect</h2>
+      <ul>
+        <li><strong>Report content:</strong> title, category, district, description and an optional photo.</li>
+        <li><strong>Account details:</strong> name, email address and a bcrypt password hash. Plain-text passwords are never stored.</li>
+        <li><strong>Technical data:</strong> IP address and request metadata are processed transiently for rate limiting, abuse prevention and server logs.</li>
+        <li><strong>Browser storage:</strong> a signed session token is kept in <code>localStorage</code> so you stay signed in. It is not a tracking cookie.</li>
+      </ul>
+
+      <h2>Why we use it</h2>
+      <ul>
+        <li>Display reports in the public feed and the authority operations dashboard.</li>
+        <li>Run automated triage to classify, summarize and prioritize reports.</li>
+        <li>Verify accounts, authorize authority actions and prevent abuse.</li>
+        <li>Operate, debug and secure the service.</li>
+      </ul>
+
+      <h2>AI triage</h2>
+      <p>
+        When you submit a report, its description and optional photo are sent to Google's Gemini
+        API for classification. The result (category, severity, urgency, summary and tags) is
+        stored with the report. Google processes that data under its own API terms. Do not include
+        sensitive personal information in a report or photo.
+      </p>
+
+      <h2>Cookies and analytics</h2>
+      <p>
+        CivicGuard does not set advertising or analytics cookies and does not load third-party
+        trackers. Fonts are served from this deployment, not from a third-party font CDN. The only
+        client-side storage is the authentication token described above, plus any data your browser
+        caches as part of normal page loading.
+      </p>
+
+      <h2>Sharing</h2>
+      <p>
+        We do not sell personal data. Data is shared only with the infrastructure needed to run the
+        service: the hosting provider (Render) and the AI provider (Google Gemini). We may disclose
+        information if required by law or to protect the service and its users.
+      </p>
+
+      <h2>Retention</h2>
+      <p>
+        Reports remain until an authority member or the operator deletes them. Account records remain
+        until the account is removed. Demonstration deployments may be reset, which removes reports
+        and accounts without notice. Backups and server logs are kept only as long as needed for
+        operations.
+      </p>
+
+      <h2>Security</h2>
+      <p>
+        Passwords are hashed with bcrypt, sessions use signed JWTs with an expiry, verification
+        tokens are stored as SHA-256 hashes, and authority actions are role-guarded. No system is
+        perfectly secure; report suspected issues through the contact channel below.
+      </p>
+
+      <h2>Your choices</h2>
+      <p>
+        You can ask for a copy or deletion of your account and reports, or object to processing, by
+        opening an issue at
+        <a href="https://github.com/rexis67/civicguard/issues" rel="noopener noreferrer">github.com/rexis67/civicguard/issues</a>.
+        Include the email address used for the account so the request can be verified. Depending on
+        where you live, you may also have the right to complain to a data-protection authority.
+      </p>
+
+      <h2>Children</h2>
+      <p>
+        CivicGuard is not directed at children under 13, and we do not knowingly collect their
+        personal data.
+      </p>
+
+      <h2>Changes</h2>
+      <p>
+        This policy may be updated as the service changes. Material changes will be reflected in the
+        date at the top of this page.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Questions or requests:
+        <a href="https://github.com/rexis67/civicguard/issues" rel="noopener noreferrer">CivicGuard issue tracker</a>.
+        For emergencies, contact your local emergency number instead — CivicGuard is not an
+        emergency service.
+      </p>
+
+      <footer>
+        <a href="/">← Back to CivicGuard</a>
+        <a href="/terms.html">Terms of Use</a>
+        <a href="https://github.com/rexis67/civicguard" rel="noopener noreferrer">Source code</a>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -54,6 +54,7 @@ const server = spawn(process.execPath, ["backend/server.js"], {
     GEMINI_API_KEY: "",
     AUTHORITY_INVITE_CODE: "smoke-invite",
     JWT_SECRET: "smoke-test-secret-that-is-definitely-long-enough",
+    FRONTEND_URL: "https://civicguard.test",
     AUTH_RATE_LIMIT: "1000",
     LOGIN_RATE_LIMIT: "1000",
     REPORT_RATE_LIMIT: "1000",
@@ -78,6 +79,38 @@ try {
   const empty = await jsonRequest("GET", "/api/reports");
   check("GET /api/reports (empty)", empty.status === 200 && empty.body.length === 0);
 
+  const deniedCors = await fetch(`${BASE}/api/reports`, {
+    headers: { Origin: "https://evil.example" },
+  });
+  check(
+    "CORS denies an unlisted browser origin",
+    deniedCors.status === 200 && !deniedCors.headers.get("access-control-allow-origin"),
+  );
+
+  const allowedCors = await fetch(`${BASE}/api/reports`, {
+    headers: { Origin: "https://civicguard.test" },
+  });
+  check(
+    "CORS allows the configured origin",
+    allowedCors.headers.get("access-control-allow-origin") === "https://civicguard.test",
+  );
+
+  const robots = await fetch(`${BASE}/robots.txt`);
+  const robotsText = await robots.text();
+  check(
+    "robots.txt is served with the sitemap URL",
+    robots.status === 200 && robotsText.includes("Sitemap: https://civicguard.test/sitemap.xml"),
+  );
+
+  const sitemap = await fetch(`${BASE}/sitemap.xml`);
+  const sitemapText = await sitemap.text();
+  check(
+    "sitemap.xml lists the public pages",
+    sitemap.status === 200 &&
+      sitemapText.includes("<loc>https://civicguard.test/</loc>") &&
+      sitemapText.includes("<loc>https://civicguard.test/privacy.html</loc>"),
+  );
+
   const stamp = Date.now();
   const citizenEmail = `smoke.citizen.${stamp}@example.com`;
   const registration = await jsonRequest("POST", "/api/auth/register", {
@@ -87,6 +120,10 @@ try {
     role: "citizen",
   });
   check("POST /api/auth/register", registration.status === 201, `status=${registration.status}`);
+  check(
+    "verification link uses the configured public origin",
+    String(registration.body.verificationUrl).startsWith("https://civicguard.test/?verifyEmail="),
+  );
 
   const token = new URL(registration.body.verificationUrl).searchParams.get("verifyEmail");
   const verification = await jsonRequest("POST", "/api/auth/verify-email", { token });
@@ -107,6 +144,61 @@ try {
     password: "wrong-password",
   });
   check("POST /api/auth/login (wrong password -> 401)", badLogin.status === 401);
+
+  const pendingEmail = `smoke.pending.${stamp}@example.com`;
+  const pendingRegistration = await jsonRequest("POST", "/api/auth/register", {
+    name: "Pending Citizen",
+    email: pendingEmail,
+    password: "CorrectHorse9!",
+    role: "citizen",
+  });
+  check("pending account registration", pendingRegistration.status === 201);
+
+  const resendWithoutPassword = await jsonRequest("POST", "/api/auth/resend-verification", {
+    email: pendingEmail,
+  });
+  check("resend without password -> 400", resendWithoutPassword.status === 400);
+
+  const resendWrongPassword = await jsonRequest("POST", "/api/auth/resend-verification", {
+    email: pendingEmail,
+    password: "wrong-password",
+  });
+  check(
+    "resend with wrong password returns no link",
+    resendWrongPassword.status === 200 && !resendWrongPassword.body.verificationUrl,
+  );
+
+  const resendCorrectPassword = await jsonRequest("POST", "/api/auth/resend-verification", {
+    email: pendingEmail,
+    password: "CorrectHorse9!",
+  });
+  check(
+    "resend with the correct password returns a link",
+    resendCorrectPassword.status === 200 && Boolean(resendCorrectPassword.body.verificationUrl),
+  );
+
+  const reRegisterWrongPassword = await jsonRequest("POST", "/api/auth/register", {
+    name: "Pending Citizen",
+    email: pendingEmail,
+    password: "wrong-password",
+    role: "citizen",
+  });
+  check(
+    "re-registering a pending account with the wrong password returns no link",
+    reRegisterWrongPassword.status === 202 && !reRegisterWrongPassword.body.verificationUrl,
+  );
+
+  const reRegisterCorrectPassword = await jsonRequest("POST", "/api/auth/register", {
+    name: "Pending Citizen",
+    email: pendingEmail,
+    password: "CorrectHorse9!",
+    role: "citizen",
+  });
+  check(
+    "re-registering a pending account with the correct password returns a link",
+    reRegisterCorrectPassword.status === 202 &&
+      Boolean(reRegisterCorrectPassword.body.verificationUrl),
+  );
 
   const noInvite = await jsonRequest("POST", "/api/auth/register", {
     name: "No Invite",

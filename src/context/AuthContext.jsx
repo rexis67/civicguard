@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   loginUser,
   registerUser,
@@ -9,6 +9,24 @@ import {
 const STORAGE_KEY = "civicguard.auth";
 const AuthContext = createContext(null);
 
+function tokenExpiry(token) {
+  try {
+    const [, encodedPayload] = token.split(".");
+    if (!encodedPayload) return null;
+    const normalized = encodedPayload.replaceAll("-", "+").replaceAll("_", "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(padded));
+    return typeof payload.exp === "number" ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+function isExpired(token) {
+  const expiry = tokenExpiry(token);
+  return !expiry || expiry <= Date.now();
+}
+
 function readStoredSession() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -18,7 +36,8 @@ function readStoredSession() {
     if (
       typeof session.token !== "string" ||
       !session.user ||
-      !["citizen", "authority"].includes(session.user.role)
+      !["citizen", "authority"].includes(session.user.role) ||
+      isExpired(session.token)
     ) {
       localStorage.removeItem(STORAGE_KEY);
       return null;
@@ -54,12 +73,43 @@ export function AuthProvider({ children }) {
     return persistSession({ token: result.token, user: result.user });
   }, [persistSession]);
 
-  const resendVerification = useCallback((email) => resendVerificationEmail(email), []);
+  const resendVerification = useCallback(
+    (credentials) => resendVerificationEmail(credentials),
+    [],
+  );
 
   const logout = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
     setSession(null);
   }, []);
+
+  // Keep tabs in sync when one of them signs in or out.
+  useEffect(() => {
+    const handleStorage = (event) => {
+      if (event.key === STORAGE_KEY) setSession(readStoredSession());
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  // Drop the session when its JWT expires instead of showing a signed-in header
+  // until the next API call fails.
+  useEffect(() => {
+    if (!session?.token) return undefined;
+
+    const expiry = tokenExpiry(session.token);
+    if (!expiry || expiry <= Date.now()) {
+      logout();
+      return undefined;
+    }
+
+    const timer = window.setTimeout(
+      logout,
+      Math.min(expiry - Date.now(), 2_147_483_647),
+    );
+    return () => window.clearTimeout(timer);
+  }, [session, logout]);
 
   const value = useMemo(
     () => ({

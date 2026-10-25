@@ -57,6 +57,10 @@ export default function ReportForm({ onSubmit }) {
         <p className="mt-2 text-sm leading-6 text-muted">
           Share the details so your community can work toward a solution.
         </p>
+        <p className="mt-3 rounded border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2 font-mono text-[10px] leading-4 text-amber-300">
+          For emergencies or immediate danger, call your local emergency number.
+          CivicGuard is for non-urgent municipal issues.
+        </p>
       </div>
 
       <form

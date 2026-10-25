@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 
 export default function LoginModal({ isOpen, onClose, onSuccess }) {
@@ -13,6 +13,65 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
   const [verificationInfo, setVerificationInfo] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const dialogRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = () => {
+      setPassword("");
+      setError("");
+      setVerificationInfo(null);
+      onClose();
+    };
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const previouslyFocused = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const focusTimer = window.setTimeout(() => {
+      const firstField = dialogRef.current?.querySelector("input, select, textarea");
+      firstField?.focus();
+    }, 0);
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+
+      if (event.key !== "Tab" || !dialogRef.current) return;
+
+      const focusable = [...dialogRef.current.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )].filter((element) => element.offsetParent !== null);
+
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -25,12 +84,11 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
       if (mode === "login") {
         const user = await login({ email, password });
         onSuccess?.(user);
-        onClose();
+        onCloseRef.current();
       } else {
         const result = await register({ name, email, password, role, inviteCode });
         setVerificationInfo(result);
         setError("");
-        setPassword("");
       }
     } catch (submitError) {
       setError(submitError.message || "Authentication failed. Please try again.");
@@ -40,10 +98,15 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
   }
 
   async function handleResendVerification() {
+    if (!password) {
+      setError("Enter the account password to resend the verification email.");
+      return;
+    }
+
     setIsResending(true);
     setError("");
     try {
-      setVerificationInfo(await resendVerification(email));
+      setVerificationInfo(await resendVerification({ email, password }));
     } catch (resendError) {
       setError(resendError.message || "Could not resend the verification email.");
     } finally {
@@ -55,14 +118,16 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
     <div
       className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-deep/80 p-4 backdrop-blur-sm"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) onCloseRef.current();
       }}
     >
       <section
         aria-labelledby="auth-modal-title"
         aria-modal="true"
         className="my-8 w-full max-w-md overflow-hidden rounded-xl border border-white/10 bg-panel shadow-2xl shadow-black/40"
+        ref={dialogRef}
         role="dialog"
+        tabIndex={-1}
       >
         <div className="border-b border-white/[0.06] px-6 pb-5 pt-6">
           <div className="flex items-start justify-between gap-4">
@@ -82,7 +147,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
             <button
               aria-label="Close authentication dialog"
               className="rounded border border-white/10 bg-panel-raised px-2.5 py-1.5 font-mono text-xs text-muted hover:text-ink"
-              onClick={onClose}
+              onClick={() => onCloseRef.current()}
               type="button"
             >
               ×
@@ -223,7 +288,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
             <label className="block">
               <span className="mb-2 block font-mono text-[9px] font-semibold uppercase tracking-wider text-muted">
                 Authority verification code
-                <span className="ml-1 font-normal normal-case tracking-normal">(optional for .gov email)</span>
+                <span className="ml-1 font-normal normal-case tracking-normal">(required unless your email domain is allowlisted)</span>
               </span>
               <input
                 autoComplete="off"
@@ -233,7 +298,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
                 value={inviteCode}
               />
               <span className="mt-1 block font-mono text-[9px] text-muted/70">
-                Authority registration requires an invite code or a .gov address.
+                Ask your municipality for the invite code. A .gov address alone does not grant access.
               </span>
             </label>
           )}

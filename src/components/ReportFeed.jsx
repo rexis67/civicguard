@@ -189,6 +189,7 @@ export default function ReportFeed() {
   useEffect(() => {
     let cancelled = false;
     let requestInFlight = false;
+    let intervalId = 0;
 
     async function loadReports() {
       if (requestInFlight) return;
@@ -211,11 +212,34 @@ export default function ReportFeed() {
       }
     }
 
+    function startPolling() {
+      if (intervalId) return;
+      intervalId = window.setInterval(loadReports, REFRESH_INTERVAL_MS);
+    }
+
+    function stopPolling() {
+      if (!intervalId) return;
+      window.clearInterval(intervalId);
+      intervalId = 0;
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        loadReports();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    }
+
     loadReports();
-    const intervalId = window.setInterval(loadReports, REFRESH_INTERVAL_MS);
+    if (document.visibilityState === "visible") startPolling();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refreshKey]);
 
@@ -309,7 +333,7 @@ export default function ReportFeed() {
             <input
               className="w-full rounded-xl border border-white/[0.06] bg-deep py-2.5 pl-10 pr-4 text-sm text-ink shadow-inner outline-none placeholder:text-muted/60 focus:border-cyan/60 focus:ring-2 focus:ring-cyan/10"
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by keyword, incident ID, or category..."
+              placeholder="Search incidents..."
               type="search"
               value={search}
             />
@@ -380,14 +404,13 @@ export default function ReportFeed() {
         </div>
       </div>
 
-      {loading ? (
-        <p aria-live="polite" className="rounded-xl border border-white/[0.06] bg-panel p-6 text-muted">
-          Loading incident stream…
-        </p>
-      ) : error ? (
-        <div className="flex flex-col gap-3 rounded-xl border border-alert/20 bg-alert/10 p-6 sm:flex-row sm:items-center sm:justify-between">
+      {error && (
+        <div className="mb-5 flex flex-col gap-3 rounded-xl border border-alert/20 bg-alert/10 p-6 sm:flex-row sm:items-center sm:justify-between">
           <p aria-live="polite" className="text-sm text-alert" role="alert">
-            {error} Automatic refresh will retry shortly.
+            {error}
+            {reports.length > 0
+              ? " Showing the last successful sync."
+              : " Automatic refresh will retry shortly."}
           </p>
           <button
             className="w-fit rounded border border-alert/30 px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-wide text-alert hover:bg-alert/10"
@@ -400,6 +423,12 @@ export default function ReportFeed() {
             Retry now
           </button>
         </div>
+      )}
+
+      {loading && reports.length === 0 ? (
+        <p aria-live="polite" className="rounded-xl border border-white/[0.06] bg-panel p-6 text-muted">
+          Loading incident stream…
+        </p>
       ) : (
         <div className={`grid grid-cols-1 gap-6 md:grid-cols-2 ${reportGridColumns}`}>
           {filteredReports.map((report, index) => {
@@ -559,7 +588,7 @@ export default function ReportFeed() {
         </div>
       )}
 
-      {!loading && filteredReports.length === 0 && (
+      {!loading && !error && filteredReports.length === 0 && (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {[0, 1, 2].map((slot) => (
             <EmptyIncidentCard index={slot} key={slot} />

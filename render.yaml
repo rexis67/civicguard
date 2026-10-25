@@ -9,6 +9,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Render injects RENDER_EXTERNAL_URL, so verification links and the
+      # sitemap use the real public origin without trusting the Host header.
       - key: SERVE_STATIC
         value: "true"
       - key: JWT_SECRET
@@ -20,7 +22,8 @@ services:
       - key: AUTHORITY_EMAIL_DOMAINS
         value: ""
       # No SMTP is provisioned by this blueprint, so registration hands the
-      # verification link back to the browser. Set to false once SMTP is set.
+      # verification link back only to a caller that proves the account
+      # password. Set to false once SMTP is configured.
       - key: RETURN_VERIFICATION_LINK
         value: "true"
       - key: CIVICGUARD_DB_PATH

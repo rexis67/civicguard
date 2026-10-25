@@ -44,8 +44,8 @@ export async function verifyEmailToken(token) {
   return postAuthRequest("verify-email", { token });
 }
 
-export async function resendVerificationEmail(email) {
-  return postAuthRequest("resend-verification", { email });
+export async function resendVerificationEmail({ email, password }) {
+  return postAuthRequest("resend-verification", { email, password });
 }
 
 export async function getReports() {

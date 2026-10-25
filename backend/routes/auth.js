@@ -15,6 +15,7 @@ import {
 } from "../services/db.js";
 import { getJwtSecret } from "../services/jwtSecret.js";
 import { sendVerificationEmail } from "../services/mailer.js";
+import { getVerificationBaseUrl } from "../services/siteUrl.js";
 
 // Load the backend-local environment file before reading module-level settings.
 dotenv.config({ path: fileURLToPath(new URL("../.env", import.meta.url)) });
@@ -44,6 +45,11 @@ const loginLimiter = rateLimit({
 });
 
 router.use(authLimiter);
+router.use((_request, response, next) => {
+  // Authentication responses can contain JWTs and verification tokens.
+  response.set("Cache-Control", "no-store");
+  next();
+});
 
 function normalizeRole(role) {
   const normalized = typeof role === "string" ? role.trim().toLowerCase() : "";
@@ -123,24 +129,25 @@ function hashVerificationToken(token) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function resolveFrontendOrigin(request) {
-  const configured = (process.env.FRONTEND_URL ?? "").replace(/\/$/, "");
-  if (configured) return configured;
+function resolveFrontendOrigin() {
+  return getVerificationBaseUrl();
+}
 
-  // Same-origin deployments (Express serves the SPA) should link back to
-  // whatever hostname the request arrived on, e.g. https://civicguard.onrender.com.
-  if (process.env.NODE_ENV === "production" && request) {
-    return `${request.protocol}://${request.get("host")}`;
+function verificationLink(token) {
+  const origin = resolveFrontendOrigin();
+  if (!origin) {
+    const error = new Error(
+      "Email verification links are not configured on this deployment. Set FRONTEND_URL to the public site origin.",
+    );
+    error.statusCode = 503;
+    error.expose = true;
+    throw error;
   }
 
-  return "http://localhost:5173";
+  return `${origin}/?verifyEmail=${encodeURIComponent(token)}`;
 }
 
-function verificationLink(token, request) {
-  return `${resolveFrontendOrigin(request)}/?verifyEmail=${encodeURIComponent(token)}`;
-}
-
-async function issueVerification(user, existingTokenHash = null, request = null) {
+async function issueVerification(user, existingTokenHash = null) {
   const rawToken = randomBytes(32).toString("base64url");
   const tokenHash = hashVerificationToken(rawToken);
   const expiresAt = Date.now() + VERIFICATION_TTL_MS;
@@ -152,7 +159,7 @@ async function issueVerification(user, existingTokenHash = null, request = null)
     await setEmailVerification(user.id, tokenHash, expiresAt);
   }
 
-  const url = verificationLink(rawToken, request);
+  const url = verificationLink(rawToken);
   const delivery = await sendVerificationEmail({
     email: user.email,
     name: user.name,
@@ -214,7 +221,20 @@ router.post("/register", async (request, response, next) => {
     const existingUser = await getUserByEmail(normalizedEmail);
     if (existingUser) {
       if (!existingUser.emailVerified) {
-        const verification = await issueVerification(existingUser, "refresh", request);
+        // Never issue a fresh verification link to someone who cannot prove
+        // they own the account. Otherwise anyone who knows a pending account's
+        // email could verify it and receive a valid session.
+        const passwordMatches = await bcrypt.compare(password, existingUser.passwordHash);
+        if (!passwordMatches) {
+          response.status(202).json({
+            verificationRequired: true,
+            message:
+              "If this account is awaiting verification, sign in with your password or register again with the original password to request a new link.",
+          });
+          return;
+        }
+
+        const verification = await issueVerification(existingUser, "refresh");
         response.status(202).json(verification ?? {
           verificationRequired: true,
           message: "If the account is eligible, a verification link will be sent.",
@@ -237,7 +257,7 @@ router.post("/register", async (request, response, next) => {
     });
 
     try {
-      response.status(201).json(await issueVerification(user, null, request));
+      response.status(201).json(await issueVerification(user));
     } catch (error) {
       await deleteUnverifiedUser(user.id);
       throw error;
@@ -273,22 +293,31 @@ router.post("/verify-email", async (request, response, next) => {
 
 router.post("/resend-verification", async (request, response, next) => {
   try {
-    const email = request.body?.email;
-    if (typeof email !== "string" || !isValidEmail(email.trim())) {
-      response.status(400).json({ error: "A valid email address is required." });
+    const { email, password } = request.body ?? {};
+    if (
+      typeof email !== "string" ||
+      !isValidEmail(email.trim()) ||
+      typeof password !== "string" ||
+      password.length === 0
+    ) {
+      response.status(400).json({ error: "Email and password are required." });
       return;
     }
 
+    const genericMessage = "If the account needs verification, a new link will be sent.";
     const user = await getUserByEmail(email.trim().toLowerCase());
-    if (!user || user.emailVerified) {
-      response.json({ message: "If the account needs verification, a new link will be sent." });
+    const passwordMatches =
+      user && !user.emailVerified
+        ? await bcrypt.compare(password, user.passwordHash)
+        : false;
+
+    if (!user || user.emailVerified || !passwordMatches) {
+      response.json({ message: genericMessage });
       return;
     }
 
-    const verification = await issueVerification(user, "refresh", request);
-    response.json(verification ?? {
-      message: "If the account needs verification, a new link will be sent.",
-    });
+    const verification = await issueVerification(user, "refresh");
+    response.json(verification ?? { message: genericMessage });
   } catch (error) {
     next(error);
   }

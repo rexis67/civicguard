@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1326" />
+    <meta
+      name="description"
+      content="Terms of use for the CivicGuard municipal incident reporting demonstration."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Terms of Use — CivicGuard</title>
+    <style>
+      @font-face {
+        font-family: "Geist";
+        font-style: normal;
+        font-weight: 300 700;
+        font-display: swap;
+        src: url("/fonts/geist-latin.woff2") format("woff2");
+      }
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #0b1326;
+        color: #dae2fd;
+        font-family: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: #4cd7f6; }
+      a:hover { color: #4edea3; }
+      .shell { max-width: 780px; margin: 0 auto; padding: 32px 20px 64px; }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: #dae2fd;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 20px;
+        letter-spacing: -0.02em;
+      }
+      .brand svg { width: 30px; height: 30px; color: #4cd7f6; }
+      .brand span { color: #4cd7f6; }
+      .eyebrow {
+        margin: 42px 0 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #4cd7f6;
+      }
+      h1 { margin: 8px 0 8px; font-size: clamp(30px, 5vw, 42px); line-height: 1.1; letter-spacing: -0.03em; }
+      h2 { margin: 34px 0 10px; font-size: 19px; letter-spacing: -0.01em; }
+      p, li { color: #b9c6e2; font-size: 15px; }
+      ul { padding-left: 20px; }
+      li { margin: 6px 0; }
+      .meta { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #7f8fae; }
+      .card {
+        margin-top: 26px;
+        border: 1px solid rgba(255, 159, 64, 0.3);
+        border-radius: 12px;
+        background: rgba(255, 159, 64, 0.08);
+        padding: 18px 20px;
+      }
+      .card p { margin: 0; color: #ffd8a8; }
+      footer {
+        margin-top: 48px;
+        border-top: 1px solid rgba(255, 255, 255, 0.09);
+        padding-top: 18px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        color: #7f8fae;
+      }
+      footer a { color: #9fb0d0; text-decoration: none; }
+      footer a:hover { color: #dae2fd; }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <a class="brand" href="/">
+        <svg fill="none" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M16 3.5 27 8v7.2c0 6.2-4.4 11.4-11 13.3C10.4 26.6 6 21.4 6 15.2V8l10-4.5Z" stroke="currentColor" stroke-width="2" />
+          <path d="m11.5 15.5 3 3 6-6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+        </svg>
+        Civic<span>Guard</span>
+      </a>
+
+      <p class="eyebrow">Legal / terms</p>
+      <h1>Terms of Use</h1>
+      <p class="meta">Last updated: 25 October 2026</p>
+
+      <div class="card">
+        <p>
+          CivicGuard is not an emergency service. If there is immediate danger, a crime in progress
+          or a medical emergency, call your local emergency number. Do not use this site to request
+          emergency help.
+        </p>
+      </div>
+
+      <h2>1. The service</h2>
+      <p>
+        CivicGuard is an open-source demonstration that lets residents report non-urgent municipal
+        issues, view a public incident feed, and lets authorized staff triage and update reports. It
+        is provided for evaluation and demonstration purposes. Reports may not reach the relevant
+        municipal department, and the operator is not a government agency.
+      </p>
+
+      <h2>2. Acceptable use</h2>
+      <ul>
+        <li>Submit only issues you have observed or reasonably believe to be accurate.</li>
+        <li>Do not submit unlawful, harassing, discriminatory, defamatory or knowingly false content.</li>
+        <li>Do not upload malware, attempt to break authentication, scrape at abusive rates, or probe the service for vulnerabilities without permission.</li>
+        <li>Do not include personal data about other people, identity documents, or confidential information in a report or photo.</li>
+      </ul>
+
+      <h2>3. Accounts and authority access</h2>
+      <p>
+        You are responsible for keeping your password secure and for activity under your account.
+        Authority accounts are invite-gated and may be revoked. Do not share invite codes or use
+        authority tools for purposes unrelated to municipal incident response.
+      </p>
+
+      <h2>4. Your content</h2>
+      <p>
+        You keep ownership of the content you submit. By submitting it, you grant the operator a
+        non-exclusive licence to store, display, process and share it as needed to operate and
+        demonstrate the service, including sending report text and photos to the AI provider for
+        triage. Reports and photos are public unless removed.
+      </p>
+
+      <h2>5. AI output</h2>
+      <p>
+        Category, severity, urgency, summaries and tags are generated automatically and may be
+        wrong, incomplete or biased. They are decision support, not an official determination.
+        Authority staff remain responsible for verifying reports and deciding on a response.
+      </p>
+
+      <h2>6. Availability and changes</h2>
+      <p>
+        The service is provided on an “as is” and “as available” basis, without warranties of any
+        kind. Features, data and this deployment may change or be discontinued at any time, and
+        demonstration data may be reset without notice.
+      </p>
+
+      <h2>7. Limitation of liability</h2>
+      <p>
+        To the maximum extent permitted by law, the operator and contributors are not liable for
+        indirect, incidental or consequential loss, or for any loss arising from reliance on the
+        service, its content or automated triage. Nothing in these terms limits rights that cannot
+        lawfully be limited.
+      </p>
+
+      <h2>8. Open-source licence</h2>
+      <p>
+        The CivicGuard source code is available under the MIT Licence at
+        <a href="https://github.com/rexis67/civicguard" rel="noopener noreferrer">github.com/rexis67/civicguard</a>.
+        The licence covers the code, not the data submitted by users.
+      </p>
+
+      <h2>9. Contact</h2>
+      <p>
+        Questions about these terms:
+        <a href="https://github.com/rexis67/civicguard/issues" rel="noopener noreferrer">CivicGuard issue tracker</a>.
+      </p>
+
+      <footer>
+        <a href="/">← Back to CivicGuard</a>
+        <a href="/privacy.html">Privacy Policy</a>
+        <a href="https://github.com/rexis67/civicguard" rel="noopener noreferrer">Source code</a>
+      </footer>
+    </div>
+  </body>
+</html>
