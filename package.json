@@ -10,6 +10,7 @@
     "start": "node backend/server.js",
     "start:backend": "npm --prefix backend start",
     "preview": "vite preview",
+    "seed": "node scripts/seed.mjs",
     "test:smoke": "node scripts/smoke.mjs"
   },
   "engines": {

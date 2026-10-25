@@ -123,6 +123,20 @@ Authority sign-up requires the invite code from `AUTHORITY_INVITE_CODE`:
 # register with role "authority" and the invite code, then follow the verification link
 ```
 
+### Load demo data
+
+The feed starts empty. To fill it with a realistic sample set — including
+pre-computed triage so no Gemini calls are needed:
+
+```bash
+# stop the API first: it caches reports in memory
+npm run seed
+npm start
+```
+
+`npm run seed -- --force` replaces existing reports instead of refusing. The
+seed refuses to run while the API is up so a live process cannot overwrite it.
+
 ---
 
 ## Production build
@@ -278,6 +292,7 @@ This replaced a synchronous call that blocked submissions for up to two minutes.
 │   ├── services/api.js
 │   └── App.jsx
 ├── scripts/smoke.mjs           # end-to-end API checks (CI)
+├── scripts/seed.mjs            # demo incident set with pre-computed triage
 ├── Dockerfile
 ├── render.yaml
 └── .github/workflows/ci.yml
@@ -289,7 +304,7 @@ This replaced a synchronous call that blocked submissions for up to two minutes.
 npm run test:smoke
 ```
 
-Boots the API against a throwaway data directory and asserts 19 behaviours: health, auth lifecycle, invite-gated authority registration, `.gov` escalation rejection, publish-without-waiting triage, host-independent image URLs, MIME rejection, role-guarded status updates and deletes, invalid input handling and JSON 404s. CI runs the same suite on every push along with a production build.
+Boots the API against a throwaway data directory and asserts 21 behaviours: health, auth lifecycle, invite-gated authority registration, `.gov` escalation rejection, publish-without-waiting triage, host-independent image URLs, MIME rejection, overlong input rejection, role-guarded status updates and deletes, invalid input handling and JSON 404s. CI runs the same suite on every push along with a production build.
 
 ## Known limitations
 

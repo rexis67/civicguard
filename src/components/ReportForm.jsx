@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { createReport } from "../services/api.js";
+import { optimizeImageForUpload } from "../services/imageOptimizer.js";
+
+const MAX_DESCRIPTION_LENGTH = 4000;
 
 export default function ReportForm({ onSubmit }) {
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [descriptionLength, setDescriptionLength] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -13,7 +17,6 @@ export default function ReportForm({ onSubmit }) {
     const formElement = event.currentTarget;
     const formData = new FormData(formElement);
     const imageInput = formElement.elements.namedItem("image");
-    if (!imageInput?.files?.length) formData.delete("image");
     if (formData.get("category") !== "Other") formData.delete("customCategory");
 
     setIsSubmitting(true);
@@ -21,9 +24,18 @@ export default function ReportForm({ onSubmit }) {
     setSubmitSuccess(false);
 
     try {
+      if (imageInput?.files?.length) {
+        const optimizedImage = await optimizeImageForUpload(imageInput.files[0]);
+        formData.delete("image");
+        formData.set("image", optimizedImage, optimizedImage.name);
+      } else {
+        formData.delete("image");
+      }
+
       const report = await createReport(formData);
       formElement.reset();
       setSelectedCategory("");
+      setDescriptionLength(0);
       setSubmitSuccess(true);
       onSubmit?.(report);
     } catch (error) {
@@ -61,6 +73,7 @@ export default function ReportForm({ onSubmit }) {
           <input
             className="block w-full rounded border border-white/10 bg-deep/70 px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-muted/50 focus:border-cyan focus:ring-2 focus:ring-cyan/20"
             id="report-title"
+            maxLength={120}
             name="title"
             placeholder="e.g. Pothole on Oak Street"
             required
@@ -146,11 +159,16 @@ export default function ReportForm({ onSubmit }) {
           <textarea
             className="block min-h-32 w-full resize-y rounded border border-white/10 bg-deep/70 px-3.5 py-2.5 text-sm leading-6 text-ink outline-none transition placeholder:text-muted/50 focus:border-cyan focus:ring-2 focus:ring-cyan/20"
             id="report-description"
+            maxLength={MAX_DESCRIPTION_LENGTH}
             name="description"
+            onChange={(event) => setDescriptionLength(event.target.value.length)}
             placeholder="Describe the issue and where it is located..."
             required
             rows={5}
           />
+          <p className="mt-1.5 text-right font-mono text-[9px] text-muted/70">
+            {descriptionLength.toLocaleString()} / {MAX_DESCRIPTION_LENGTH.toLocaleString()}
+          </p>
         </div>
 
         <div>
@@ -168,7 +186,8 @@ export default function ReportForm({ onSubmit }) {
             type="file"
           />
           <p className="mt-2 font-mono text-[9px] text-muted/70">
-            Add a photo to help explain the issue. Images only.
+            Add a photo to help explain the issue. Images only — large photos are
+            resized before upload.
           </p>
         </div>
 

@@ -163,6 +163,23 @@ try {
   );
   check("status update without token -> 401", duplicateStatus.status === 401);
 
+  const overlongForm = new FormData();
+  overlongForm.set("description", "x".repeat(4001));
+  const overlongResponse = await fetch(`${BASE}/api/reports`, {
+    method: "POST",
+    body: overlongForm,
+  });
+  check("overlong description rejected -> 400", overlongResponse.status === 400);
+
+  const overlongTitleForm = new FormData();
+  overlongTitleForm.set("description", "Streetlight out on the corner.");
+  overlongTitleForm.set("title", "t".repeat(121));
+  const overlongTitleResponse = await fetch(`${BASE}/api/reports`, {
+    method: "POST",
+    body: overlongTitleForm,
+  });
+  check("overlong title rejected -> 400", overlongTitleResponse.status === 400);
+
   const imageForm = new FormData();
   imageForm.set("description", "Broken kerb outside the central library.");
   imageForm.set(

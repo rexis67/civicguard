@@ -223,7 +223,14 @@ export default function ReportFeed() {
   }, [refreshKey]);
 
   const reportDetails = useMemo(
-    () => reports.map(getReportDetails),
+    () =>
+      [...reports]
+        .sort((left, right) => {
+          const leftTime = new Date(left.timestamp ?? left.createdAt ?? 0).getTime() || 0;
+          const rightTime = new Date(right.timestamp ?? right.createdAt ?? 0).getTime() || 0;
+          return rightTime - leftTime;
+        })
+        .map(getReportDetails),
     [reports],
   );
   const filteredReports = useMemo(() => {

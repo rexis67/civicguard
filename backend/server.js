@@ -128,6 +128,11 @@ app.get("/api/health", (_request, response) => {
 
 app.use("/api/auth", authRoutes);
 
+const MAX_DESCRIPTION_LENGTH = 4000;
+const MAX_TITLE_LENGTH = 120;
+const MAX_DISTRICT_LENGTH = 100;
+const MAX_CATEGORY_LENGTH = 80;
+
 function provisionalTitle(description) {
   const firstLine = description.split(/\r?\n/)[0].trim();
   return firstLine.length > 90 ? `${firstLine.slice(0, 87)}…` : firstLine;
@@ -186,6 +191,14 @@ app.post(
         return;
       }
 
+      const normalizedDescription = description.trim();
+      if (normalizedDescription.length > MAX_DESCRIPTION_LENGTH) {
+        response.status(400).json({
+          error: `Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`,
+        });
+        return;
+      }
+
       const selectedCategory =
         typeof request.body?.category === "string" ? request.body.category.trim() : "";
       const customCategory =
@@ -198,11 +211,35 @@ app.post(
         return;
       }
 
-      const normalizedDescription = description.trim();
+      if ((selectedCategory === "Other" ? customCategory : selectedCategory).length > MAX_CATEGORY_LENGTH) {
+        response.status(400).json({
+          error: `Category must be ${MAX_CATEGORY_LENGTH} characters or fewer.`,
+        });
+        return;
+      }
+
       const providedTitle =
         typeof request.body?.title === "string" && request.body.title.trim()
           ? request.body.title.trim()
           : null;
+      if (providedTitle && providedTitle.length > MAX_TITLE_LENGTH) {
+        response.status(400).json({
+          error: `Title must be ${MAX_TITLE_LENGTH} characters or fewer.`,
+        });
+        return;
+      }
+
+      const providedDistrict =
+        typeof request.body?.district === "string" && request.body.district.trim()
+          ? request.body.district.trim()
+          : "Unassigned";
+      if (providedDistrict.length > MAX_DISTRICT_LENGTH) {
+        response.status(400).json({
+          error: `District must be ${MAX_DISTRICT_LENGTH} characters or fewer.`,
+        });
+        return;
+      }
+
       const providedCategory =
         selectedCategory === "Other" ? customCategory : selectedCategory || null;
 
@@ -220,10 +257,7 @@ app.post(
         analysis: null,
         analysisStatus: "pending",
         status: "Pending",
-        district:
-          typeof request.body?.district === "string" && request.body.district.trim()
-            ? request.body.district.trim()
-            : "Unassigned",
+        district: providedDistrict,
         image: storedImage,
       };
 
