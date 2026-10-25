@@ -163,6 +163,37 @@ try {
   );
   check("status update without token -> 401", duplicateStatus.status === 401);
 
+  const imageForm = new FormData();
+  imageForm.set("description", "Broken kerb outside the central library.");
+  imageForm.set(
+    "image",
+    new Blob([Buffer.from("89504e470d0a1a0a0000000d49484452", "hex")], { type: "image/png" }),
+    "kerb.png",
+  );
+  const imageResponse = await fetch(`${BASE}/api/reports`, {
+    method: "POST",
+    body: imageForm,
+  });
+  const imageReport = await imageResponse.json();
+  check(
+    "image upload stores a host-independent URL",
+    imageResponse.status === 201 && String(imageReport.image?.url).startsWith("/uploads/"),
+    imageReport.image?.url,
+  );
+
+  const badTypeForm = new FormData();
+  badTypeForm.set("description", "Attached a text file instead of a photo.");
+  badTypeForm.set(
+    "image",
+    new Blob([Buffer.from("not an image")], { type: "text/plain" }),
+    "note.txt",
+  );
+  const badTypeResponse = await fetch(`${BASE}/api/reports`, {
+    method: "POST",
+    body: badTypeForm,
+  });
+  check("non-image upload rejected -> 400", badTypeResponse.status === 400);
+
   const statusUpdate = await jsonRequest(
     "PATCH",
     `/api/reports/${createdReport.id}/status`,

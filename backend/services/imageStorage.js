@@ -89,7 +89,9 @@ export async function storeReportImage({ reportId, file }) {
     flag: "wx",
     mode: 0o600,
   });
-  const apiBaseUrl = (process.env.API_PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 5000}`).replace(/\/$/, "");
+  // Relative URLs keep working behind a proxy and on any hostname. Set
+  // API_PUBLIC_BASE_URL only when images are served from a different origin.
+  const apiBaseUrl = (process.env.API_PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
 
   return {
     url: `${apiBaseUrl}/uploads/${encodeURIComponent(fileName)}`,

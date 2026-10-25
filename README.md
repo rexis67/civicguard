@@ -4,7 +4,7 @@
 
 Built with React + Vite on the front and Express + SQLite on the back, shipped as **one self-contained service** that hosts both the API and the built UI.
 
-[![CI](https://github.com/OWNER/civicguard/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
+[![CI](https://github.com/OWNER/civicguard/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/civicguard/actions/workflows/ci.yml)
 
 > Replace `OWNER` in the badge URL with your GitHub username once the repository is pushed.
 
@@ -190,7 +190,7 @@ All variables are optional except `GEMINI_API_KEY` for AI triage and `JWT_SECRET
 | `SERVE_STATIC` | `true` | Serve the built SPA from Express |
 | `FRONTEND_URL` | `http://localhost:5173` | Verification-link base URL; also the default CORS origin |
 | `CORS_ORIGINS` | – | Comma-separated additional allowed origins |
-| `API_PUBLIC_BASE_URL` | `http://localhost:PORT` | Absolute base for locally stored image URLs |
+| `API_PUBLIC_BASE_URL` | – (relative `/uploads`) | Absolute base for locally stored image URLs |
 | `GEMINI_API_KEY` | – | Enables AI triage (`503` on submission if unset) |
 | `GEMINI_MODEL` | `gemini-3.8-flash` | Model used for triage |
 | `ANALYSIS_TIMEOUT_MS` | `180000` | Abandon a stalled triage and flag the report |
@@ -287,7 +287,7 @@ This replaced a synchronous call that blocked submissions for up to two minutes.
 npm run test:smoke
 ```
 
-Boots the API against a throwaway data directory and asserts 17 behaviours: health, auth lifecycle, invite-gated authority registration, `.gov` escalation rejection, publish-without-waiting triage, role-guarded status updates and deletes, invalid input handling and JSON 404s. CI runs the same suite on every push along with a production build.
+Boots the API against a throwaway data directory and asserts 19 behaviours: health, auth lifecycle, invite-gated authority registration, `.gov` escalation rejection, publish-without-waiting triage, host-independent image URLs, MIME rejection, role-guarded status updates and deletes, invalid input handling and JSON 404s. CI runs the same suite on every push along with a production build.
 
 ## Known limitations
 
