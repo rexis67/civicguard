@@ -24,6 +24,9 @@ backend/CIVICGAURD.json
 | File size | 25,451,072 bytes |
 | SHA-256 | `7663b89246d4ef12e8683eceac03d9e3595d13584759cf8056bbbfc1863aa732` |
 
+The file is marked `-text` in `.gitattributes`, so Git does not apply CRLF
+conversion and the hash is stable on Windows and Linux checkouts.
+
 The export ends when the Copilot monthly credit limit was reached. The final
 request result is a `quota_exceeded` response from Copilot, not a truncation of
 the file.
