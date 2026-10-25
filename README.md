@@ -220,6 +220,8 @@ All variables are optional except `GEMINI_API_KEY` for AI triage and `JWT_SECRET
 
 This replaced a synchronous call that blocked submissions for up to two minutes. With `gemini-3.8-flash`, a triage round trip currently takes roughly 100 seconds; the submission path is unaffected and `ANALYSIS_TIMEOUT_MS` controls when a slow call is abandoned for manual review.
 
+> **Free-tier quota:** the Gemini free tier allows 20 requests per day for this model. Once exhausted, the API returns `429`, the report is flagged for manual review, and the app keeps working. Enable billing on the AI Studio key for an unrestricted demo.
+
 ## Security model
 
 - Passwords hashed with bcrypt (cost 12); password length capped at 72 bytes (bcrypt limit).
@@ -295,6 +297,7 @@ Boots the API against a throwaway data directory and asserts 19 behaviours: heal
 - Status changes do not yet record an audit trail (actor, timestamp, note).
 - Email verification is required, so a deployment without SMTP cannot onboard users unless `RETURN_VERIFICATION_LINK` is enabled.
 - No automated UI tests; the Playwright dependency is reserved for that work.
+- AI triage depends on the Gemini free-tier quota (20 reports/day for `gemini-3.8-flash`); exhausted quota degrades gracefully to manual review.
 
 ## License
 
