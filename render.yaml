@@ -29,6 +29,10 @@ services:
         value: /data/reports.json
       - key: UPLOAD_DIR
         value: /data/uploads
+      # Seeds 12 realistic, pre-triaged incidents into an empty volume on first
+      # boot so the deployed demo is never empty. Remove for a real deployment.
+      - key: SEED_DEMO_DATA
+        value: "true"
     disk:
       name: civicguard-data
       mountPath: /data

@@ -4,9 +4,7 @@
 
 Built with React + Vite on the front and Express + SQLite on the back, shipped as **one self-contained service** that hosts both the API and the built UI.
 
-[![CI](https://github.com/OWNER/civicguard/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/civicguard/actions/workflows/ci.yml)
-
-> Replace `OWNER` in the badge URL with your GitHub username once the repository is pushed.
+![CivicGuard live incident feed: 12 seeded incidents with severity, urgency, category, district and status](docs/screenshots/feed.png)
 
 ---
 
@@ -160,12 +158,12 @@ npm start          # http://localhost:5000
 
 The repository ships a [`render.yaml`](render.yaml) blueprint:
 
-1. Push the repo to GitHub.
+1. Push the repo to GitHub — `npm run publish` creates it and pushes (requires the GitHub CLI signed in, or an existing `origin` remote).
 2. Render → **New → Blueprint** → select the repo.
 3. Fill in `GEMINI_API_KEY` and `AUTHORITY_INVITE_CODE` when prompted.
-4. Deploy. The blueprint provisions a 1 GB disk at `/data`, generates `JWT_SECRET`, and sets `NODE_ENV=production`.
+4. Deploy. The blueprint provisions a 1 GB disk at `/data`, generates `JWT_SECRET`, sets `NODE_ENV=production`, and seeds 12 pre-triaged demo incidents into the empty volume (`SEED_DEMO_DATA=true`) so the live feed is never blank.
 
-The health check is `GET /api/health`. Because the blueprint provisions no SMTP credentials, it also sets `RETURN_VERIFICATION_LINK=true`: the register dialog hands you the verification link directly so accounts work out of the box. Configure SMTP and flip that to `false` for a real deployment.
+Remove `SEED_DEMO_DATA` once the deployment receives real reports. The health check is `GET /api/health`. Because the blueprint provisions no SMTP credentials, it also sets `RETURN_VERIFICATION_LINK=true`: the register dialog hands you the verification link directly so accounts work out of the box. Configure SMTP and flip that to `false` for a real deployment.
 
 > Render's free tier does not support persistent disks. Use the Starter plan, or point `REPORT_IMAGE_STORAGE=s3` and `CIVICGUARD_DB_PATH` at a hosted database if you need a free tier.
 
@@ -219,6 +217,7 @@ All variables are optional except `GEMINI_API_KEY` for AI triage and `JWT_SECRET
 | `TRUST_PROXY_HOPS` | `1` in production, else `0` | Reverse-proxy depth for correct client IPs |
 | `CIVICGUARD_DB_PATH` | `backend/civicguard.sqlite` | User database |
 | `CIVICGUARD_REPORTS_PATH` | `backend/reports.json` | Report store |
+| `SEED_DEMO_DATA` | `false` | Load 12 pre-triaged incidents when the store is empty (demo deployments) |
 | `UPLOAD_DIR` | `backend/uploads` | Local image directory |
 | `REPORT_IMAGE_STORAGE` | `local` | `local` or `s3` |
 | `SMTP_*` | – | Required in production for email verification |

@@ -17,7 +17,7 @@ const categoryStyles = {
   garbage: "text-yellow-300",
 };
 
-const categories = ["All", "Pothole", "Streetlight", "Accessibility", "Garbage"];
+const PRIMARY_CATEGORIES = ["Pothole", "Streetlight", "Accessibility", "Garbage"];
 
 function getSeverity(value) {
   if (typeof value === "string") {
@@ -119,9 +119,6 @@ function SeverityIndicator({ score }) {
           />
         ))}
       </div>
-      <p className="mt-1.5 font-mono text-[10px] text-muted">
-        {score === null ? "Not rated" : `${score} / 5`}
-      </p>
     </div>
   );
 }
@@ -233,6 +230,19 @@ export default function ReportFeed() {
         .map(getReportDetails),
     [reports],
   );
+  const categories = useMemo(() => {
+    const counts = new Map();
+    for (const report of reportDetails) {
+      counts.set(report.category, (counts.get(report.category) ?? 0) + 1);
+    }
+
+    const customCategories = [...counts.keys()]
+      .filter((category) => !PRIMARY_CATEGORIES.includes(category))
+      .sort((left, right) => left.localeCompare(right));
+
+    return ["All", ...PRIMARY_CATEGORIES.filter((category) => counts.has(category)), ...customCategories];
+  }, [reportDetails]);
+
   const filteredReports = useMemo(() => {
     const query = search.trim().toLowerCase();
     return reportDetails.filter((report) => {

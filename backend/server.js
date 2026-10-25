@@ -10,6 +10,7 @@ import rateLimit from "express-rate-limit";
 import multer from "multer";
 import { requireAuthority, verifyToken } from "./middleware/auth.js";
 import authRoutes from "./routes/auth.js";
+import { buildSampleReports } from "./data/sampleReports.js";
 import {
   deleteReport,
   getReportById,
@@ -413,10 +414,27 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error("PORT must be an integer between 1 and 65535.");
 }
 
+async function seedDemoDataIfRequested() {
+  if (process.env.SEED_DEMO_DATA !== "true") return;
+
+  const existingReports = await getReports();
+  if (existingReports.length > 0) {
+    console.log(`[seed] ${existingReports.length} report(s) already present, skipping demo seed.`);
+    return;
+  }
+
+  const sampleReports = buildSampleReports();
+  for (const report of sampleReports) {
+    await saveReport(report);
+  }
+  console.log(`[seed] loaded ${sampleReports.length} demo reports (SEED_DEMO_DATA=true).`);
+}
+
 async function startServer() {
   await getReports();
   await getJwtSecret();
   await ensureImageStorageReady();
+  await seedDemoDataIfRequested();
 
   const server = app.listen(port, () => {
     console.log(`CivicGuard API listening on port ${port}`);
