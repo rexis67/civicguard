@@ -49,6 +49,17 @@ private keys, JWTs, or password hashes are present in the published file.** The
 production `AUTHORITY_INVITE_CODE` is a new value set only in the deployment
 environment; it is not in this repository.
 
+## Readable chat rendering
+
+Reading raw JSON is unwieldy, so the same 43 messages are also available in
+chat form, generated from the JSON above with no content changes:
+
+- `docs/copilot-chat-transcript.md` — linear Markdown transcript (prompts and Copilot replies in order)
+- `docs/copilot-chat.html` — self-contained chat-style viewer (open locally, no tooling needed)
+
+The JSON file remains the official evidence; these renderings exist purely so
+judges can read the conversation without tooling.
+
 ## Verify the file
 
 ```bash

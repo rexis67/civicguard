@@ -322,7 +322,7 @@ Boots the API against a throwaway data directory and asserts 32 behaviours: heal
 
 The **LEGACY 8.0** hackathon requires the complete GitHub Copilot chat history as a JSON file. The export used to build CivicGuard is committed at [`backend/CIVICGAURD.json`](backend/CIVICGAURD.json) — **43 Copilot requests** from the 24–25 October 2026 build session.
 
-See [`docs/copilot-evidence.md`](docs/copilot-evidence.md) for the export metadata, SHA-256 integrity hash, verification commands and the three credentials/personal identifiers redacted before publication. No live API keys, tokens, password hashes or production invite codes are in the repository.
+The same conversation is also readable in chat form with no tooling: [`docs/copilot-chat-transcript.md`](docs/copilot-chat-transcript.md) (Markdown) and [`docs/copilot-chat.html`](docs/copilot-chat.html) (chat-style viewer). See [`docs/copilot-evidence.md`](docs/copilot-evidence.md) for the export metadata, SHA-256 integrity hash, verification commands and the three credentials/personal identifiers redacted before publication. No live API keys, tokens, password hashes or production invite codes are in the repository.
 
 ## Known limitations
 
