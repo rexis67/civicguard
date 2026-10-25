@@ -136,6 +136,8 @@ npm start
 
 `npm run seed -- --force` replaces existing reports instead of refusing. The
 seed refuses to run while the API is up so a live process cannot overwrite it.
+On a host with a shell (e.g. Render), run the forced variant and then restart
+the service so it reloads the seeded file.
 
 ---
 
