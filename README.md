@@ -192,7 +192,8 @@ All variables are optional except `GEMINI_API_KEY` for AI triage and `JWT_SECRET
 | `CORS_ORIGINS` | – | Comma-separated additional allowed origins |
 | `API_PUBLIC_BASE_URL` | `http://localhost:PORT` | Absolute base for locally stored image URLs |
 | `GEMINI_API_KEY` | – | Enables AI triage (`503` on submission if unset) |
-| `ANALYSIS_TIMEOUT_MS` | `120000` | Abandon a stalled triage and flag the report |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Model used for triage |
+| `ANALYSIS_TIMEOUT_MS` | `180000` | Abandon a stalled triage and flag the report |
 | `JWT_SECRET` | generated in dev | Must be ≥ 32 characters in production |
 | `AUTHORITY_INVITE_CODE` | – | Required for authority self-registration |
 | `AUTHORITY_EMAIL_DOMAINS` | – | Optional domain allowlist that bypasses the invite code |
@@ -217,7 +218,7 @@ All variables are optional except `GEMINI_API_KEY` for AI triage and `JWT_SECRET
 4. On timeout (`ANALYSIS_TIMEOUT_MS`) or provider failure the record is marked `analysisStatus: "failed"` with a manual-review message. The submission itself never fails.
 5. The feed and dashboard poll every 5 seconds, so cards flip from **ANALYZING** to a graded incident without a refresh.
 
-This replaced a synchronous call that blocked submissions for up to two minutes.
+This replaced a synchronous call that blocked submissions for up to two minutes. With `gemini-3.8-flash`, a triage round trip currently takes roughly 100 seconds; the submission path is unaffected and `ANALYSIS_TIMEOUT_MS` controls when a slow call is abandoned for manual review.
 
 ## Security model
 

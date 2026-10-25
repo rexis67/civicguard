@@ -39,7 +39,7 @@ const distDirectory = path.resolve(backendDirectory, "..", "dist");
 const servesStaticBuild =
   process.env.SERVE_STATIC !== "false" && existsSync(path.join(distDirectory, "index.html"));
 
-const analysisTimeoutMs = Number.parseInt(process.env.ANALYSIS_TIMEOUT_MS ?? "120000", 10);
+const analysisTimeoutMs = Number.parseInt(process.env.ANALYSIS_TIMEOUT_MS ?? "180000", 10);
 const reportRateLimit = Number.parseInt(process.env.REPORT_RATE_LIMIT ?? "30", 10);
 const REPORT_RATE_WINDOW_MS = 10 * 60 * 1000;
 
@@ -149,7 +149,7 @@ async function triageReport({ reportId, description, file, keepTitle, keepCatego
   try {
     const analysis = await withTimeout(
       analyzeIssueReport(description, file),
-      Number.isFinite(analysisTimeoutMs) && analysisTimeoutMs > 0 ? analysisTimeoutMs : 120000,
+      Number.isFinite(analysisTimeoutMs) && analysisTimeoutMs > 0 ? analysisTimeoutMs : 180000,
     );
 
     const patch = {

@@ -10,6 +10,8 @@ const ai = apiKey && apiKey !== "your_gemini_api_key_here"
   ? new GoogleGenAI({ apiKey })
   : null;
 
+const model = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
+
 const categories = ["Pothole", "Streetlight", "Accessibility", "Garbage"];
 const urgencyLevels = ["Low", "Medium", "High", "Critical"];
 
@@ -90,7 +92,7 @@ export async function analyzeIssueReport(description, imageFile = null) {
   }
 
   const interaction = await ai.interactions.create({
-    model: "gemini-3.8-flash",
+    model,
     input,
     response_format: {
       type: "text",
@@ -99,6 +101,8 @@ export async function analyzeIssueReport(description, imageFile = null) {
     },
     generation_config: {
       temperature: 0.2,
+      // Triage is a short classification task; extended thinking only adds latency.
+      thinking_level: "low",
     },
     store: false,
   });

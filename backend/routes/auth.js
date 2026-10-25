@@ -1,5 +1,7 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import bcrypt from "bcryptjs";
+import dotenv from "dotenv";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
@@ -13,6 +15,9 @@ import {
 } from "../services/db.js";
 import { getJwtSecret } from "../services/jwtSecret.js";
 import { sendVerificationEmail } from "../services/mailer.js";
+
+// Load the backend-local environment file before reading module-level settings.
+dotenv.config({ path: fileURLToPath(new URL("../.env", import.meta.url)) });
 
 const router = express.Router();
 const PASSWORD_MIN_LENGTH = 8;
