@@ -37,8 +37,18 @@ try {
     exit $LASTEXITCODE
   }
 
-  $gh = Get-Command gh -ErrorAction SilentlyContinue
-  if (-not $gh) {
+  $ghCommand = Get-Command gh -ErrorAction SilentlyContinue
+  $ghExe = if ($ghCommand) { $ghCommand.Source } else { $null }
+  if (-not $ghExe) {
+    $candidates = @(
+      (Join-Path $env:ProgramFiles "GitHub CLI\gh.exe"),
+      (Join-Path ${env:ProgramFiles(x86)} "GitHub CLI\gh.exe"),
+      (Join-Path $env:LOCALAPPDATA "GitHubCLI\gh.exe")
+    )
+    $ghExe = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+  }
+
+  if (-not $ghExe) {
     Write-Host ""
     Write-Host "No Git remote yet, and the GitHub CLI is not installed." -ForegroundColor Yellow
     Write-Host ""
@@ -53,14 +63,19 @@ try {
     exit 1
   }
 
-  & gh auth status *> $null
+  & $ghExe auth status *> $null
   if ($LASTEXITCODE -ne 0) {
-    Write-Host "The GitHub CLI is installed but not signed in. Run 'gh auth login', then 'npm run publish'." -ForegroundColor Yellow
-    exit 1
+    Write-Host "No GitHub session yet. Opening the GitHub sign-in flow..." -ForegroundColor Yellow
+    Write-Host "Copy the one-time code shown below, press Enter, and approve in the browser."
+    & $ghExe auth login --hostname github.com --git-protocol https --web
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host "Sign-in was not completed. Run 'gh auth login' and try again." -ForegroundColor Yellow
+      exit 1
+    }
   }
 
-  $login = (& gh api user --jq .login).Trim()
-  $userIds = (& gh api user --jq .id).Trim()
+  $login = (& $ghExe api user --jq .login).Trim()
+  $userIds = (& $ghExe api user --jq .id).Trim()
   $currentEmail = (& $git config user.email).Trim()
 
   if (-not $currentEmail -or $currentEmail -eq "codew@users.noreply.github.com") {
@@ -71,10 +86,10 @@ try {
   }
 
   Write-Host "Creating github.com/$login/$repoName and pushing '$branch'..."
-  & gh repo create $repoName --public --source=. --remote=origin --push --description $description
+  & $ghExe repo create $repoName --public --source=. --remote=origin --push --description $description
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-  & gh repo edit --add-topic civictech --add-topic hackathon --add-topic react --add-topic express --add-topic ai 2>$null
+  & $ghExe repo edit --add-topic civictech --add-topic hackathon --add-topic react --add-topic express --add-topic ai 2>$null
 
   Write-Host ""
   Write-Host "Published: https://github.com/$login/$repoName" -ForegroundColor Green

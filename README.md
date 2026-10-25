@@ -158,7 +158,7 @@ npm start          # http://localhost:5000
 
 The repository ships a [`render.yaml`](render.yaml) blueprint:
 
-1. Push the repo to GitHub — `npm run publish` creates it and pushes (requires the GitHub CLI signed in, or an existing `origin` remote).
+1. Push the repo to GitHub — `npm run publish`. If the GitHub CLI is installed but not signed in, the script starts the browser sign-in flow, then creates the repo and pushes.
 2. Render → **New → Blueprint** → select the repo.
 3. Fill in `GEMINI_API_KEY` and `AUTHORITY_INVITE_CODE` when prompted.
 4. Deploy. The blueprint provisions a 1 GB disk at `/data`, generates `JWT_SECRET`, sets `NODE_ENV=production`, and seeds 12 pre-triaged demo incidents into the empty volume (`SEED_DEMO_DATA=true`) so the live feed is never blank.
