@@ -1,0 +1,27 @@
+node_modules/
+dist/
+*.local
+.env*
+!.env.example
+
+# Local runtime data
+backend/reports.json
+backend/reports.json.tmp
+backend/users.json
+backend/users.json.tmp
+backend/.jwt-secret
+backend/*.sqlite
+backend/*.sqlite-shm
+backend/*.sqlite-wal
+backend/uploads/
+backend/users.json.migrated
+
+# Scratch exports (chat transcripts, dumps, archives)
+backend/CIVICGAURD.json
+*.zip
+
+# Logs and OS noise
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
