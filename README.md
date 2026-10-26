@@ -332,6 +332,7 @@ The same conversation is also readable in chat form with no tooling: [`docs/copi
 - Status changes do not yet record an audit trail (actor, timestamp, note).
 - Email verification is required, so a deployment without SMTP cannot onboard users unless `RETURN_VERIFICATION_LINK` is enabled.
 - No automated UI tests in CI; Playwright checks for layout, modal accessibility, form submission and the map/location picker were run manually.
+- The incident map loads Esri raster tiles from the network. If tiles are blocked, every report remains available as a text card with the same data.
 - The free Render deployment uses ephemeral storage: the 12 demo incidents reseed, but user accounts, reports and uploads reset on restart/redeploy. Use the Starter disk for persistence.
 - AI triage depends on the Gemini free-tier quota (20 reports/day for `gemini-3.8-flash`); exhausted quota degrades gracefully to manual review.
 
