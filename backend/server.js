@@ -92,7 +92,13 @@ app.use(
             scriptSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
             fontSrc: ["'self'", "data:"],
-            imgSrc: ["'self'", "data:", "blob:", ...imageOrigins],
+            imgSrc: [
+              "'self'",
+              "data:",
+              "blob:",
+              "https://server.arcgisonline.com",
+              ...imageOrigins,
+            ],
             connectSrc: ["'self'"],
             objectSrc: ["'none'"],
             frameAncestors: ["'none'"],
@@ -118,7 +124,7 @@ app.use(
 app.use((_request, response, next) => {
   response.set(
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    "camera=(), microphone=(), geolocation=(self), payment=(), usb=()",
   );
   next();
 });
@@ -174,6 +180,34 @@ const MAX_DESCRIPTION_LENGTH = 4000;
 const MAX_TITLE_LENGTH = 120;
 const MAX_DISTRICT_LENGTH = 100;
 const MAX_CATEGORY_LENGTH = 80;
+
+function parseReportLocation(latitude, longitude) {
+  const hasLatitude =
+    latitude !== undefined && latitude !== null && String(latitude).trim() !== "";
+  const hasLongitude =
+    longitude !== undefined && longitude !== null && String(longitude).trim() !== "";
+
+  if (!hasLatitude && !hasLongitude) return { location: null };
+  if (hasLatitude !== hasLongitude) {
+    return { error: "Provide both latitude and longitude, or neither." };
+  }
+
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return { error: "Latitude and longitude must be valid numbers." };
+  }
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return { error: "Latitude must be between -90 and 90 and longitude between -180 and 180." };
+  }
+
+  return {
+    location: {
+      lat: Number(lat.toFixed(6)),
+      lng: Number(lng.toFixed(6)),
+    },
+  };
+}
 
 function provisionalTitle(description) {
   const firstLine = description.split(/\r?\n/)[0].trim();
@@ -285,6 +319,15 @@ app.post(
       const providedCategory =
         selectedCategory === "Other" ? customCategory : selectedCategory || null;
 
+      const parsedLocation = parseReportLocation(
+        request.body?.latitude,
+        request.body?.longitude,
+      );
+      if (parsedLocation.error) {
+        response.status(400).json({ error: parsedLocation.error });
+        return;
+      }
+
       const reportId = randomUUID();
       storedImage = request.file
         ? await storeReportImage({ reportId, file: request.file })
@@ -300,6 +343,7 @@ app.post(
         analysisStatus: "pending",
         status: "Pending",
         district: providedDistrict,
+        location: parsedLocation.location,
         image: storedImage,
       };
 

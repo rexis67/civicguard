@@ -92,7 +92,7 @@
 
       <p class="eyebrow">Legal / privacy</p>
       <h1>Privacy Policy</h1>
-      <p class="meta">Last updated: 25 October 2026</p>
+      <p class="meta">Last updated: 26 October 2026</p>
 
       <div class="card">
         <p>
@@ -105,6 +105,7 @@
       <h2>What we collect</h2>
       <ul>
         <li><strong>Report content:</strong> title, category, district, description and an optional photo.</li>
+        <li><strong>Optional location:</strong> map coordinates you place or capture with browser geolocation. If you do not add a pin, no coordinates are stored. Pins are public on the incident map.</li>
         <li><strong>Account details:</strong> name, email address and a bcrypt password hash. Plain-text passwords are never stored.</li>
         <li><strong>Technical data:</strong> IP address and request metadata are processed transiently for rate limiting, abuse prevention and server logs.</li>
         <li><strong>Browser storage:</strong> a signed session token is kept in <code>localStorage</code> so you stay signed in. It is not a tracking cookie.</li>
@@ -112,7 +113,7 @@
 
       <h2>Why we use it</h2>
       <ul>
-        <li>Display reports in the public feed and the authority operations dashboard.</li>
+        <li>Display reports and their optional location pins in the public feed and the authority operations dashboard.</li>
         <li>Run automated triage to classify, summarize and prioritize reports.</li>
         <li>Verify accounts, authorize authority actions and prevent abuse.</li>
         <li>Operate, debug and secure the service.</li>
@@ -131,13 +132,17 @@
         CivicGuard does not set advertising or analytics cookies and does not load third-party
         trackers. Fonts are served from this deployment, not from a third-party font CDN. The only
         client-side storage is the authentication token described above, plus any data your browser
-        caches as part of normal page loading.
+        caches as part of normal page loading. The incident map loads raster tiles directly from
+        Esri; those requests expose your IP address to Esri but are not used for advertising or
+        cross-site tracking. Browser geolocation is requested only when you press
+        <em>Use my location</em> and is subject to your browser permission.
       </p>
 
       <h2>Sharing</h2>
       <p>
         We do not sell personal data. Data is shared only with the infrastructure needed to run the
-        service: the hosting provider (Render) and the AI provider (Google Gemini). We may disclose
+        service: the hosting provider (Render), the AI provider (Google Gemini) and the map tile
+        provider (Esri). We may disclose
         information if required by law or to protect the service and its users.
       </p>
 

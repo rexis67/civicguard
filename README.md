@@ -32,8 +32,9 @@ Built with React + Vite on the front and Express + SQLite on the back, shipped a
 
 **Citizen**
 - Submit an incident with a title, category, district, description and photo
+- Optional location pin: click the map, drag the marker, or use browser geolocation
 - No account needed to browse or submit; sign in to be recognised as a citizen
-- Live feed with full-text search, category/urgency/district filters and 5-second auto-sync
+- Live feed with a severity-coloured incident map, full-text search, category/urgency/district filters and 5-second auto-sync
 - Email verification flow with invite-gated authority accounts
 - Privacy and terms pages, self-hosted fonts, no analytics or third-party trackers
 
@@ -79,10 +80,11 @@ Everything mutable lives under one data directory (`/data` in Docker), which is 
 
 | Layer | Choice |
 |---|---|
-| UI | React 18, Vite 6, Tailwind CSS 3 |
+| UI | React 18, Vite 6, Tailwind CSS 3, Leaflet |
 | API | Express 4, Node 20+ |
 | Auth | JWT (8 h), bcrypt (cost 12), email verification tokens hashed with SHA-256 |
 | Storage | SQLite (`better-sqlite3`) for users, JSON document store for reports, local disk or S3-compatible object storage for images |
+| Maps | Leaflet + Esri Dark Gray Canvas raster tiles (no API key), attribution shown in-map |
 | AI | Google Gemini via `@google/genai`, schema-constrained JSON output |
 | Ops | Docker, Render blueprint, GitHub Actions, `helmet`, `express-rate-limit` |
 
@@ -275,7 +277,7 @@ This replaced a synchronous call that blocked submissions for up to two minutes.
 | `GET` | `/api/health` | – | Liveness probe |
 | `GET` | `/api/reports` | – | All reports (newest data, full list) |
 | `GET` | `/api/reports/:id` | – | Single report |
-| `POST` | `/api/reports` | – | Submit a report (`multipart/form-data`: `description`, `category`, `customCategory`, `district`, `title`, `image`) |
+| `POST` | `/api/reports` | – | Submit a report (`multipart/form-data`: `description`, `category`, `customCategory`, `district`, `title`, `latitude`, `longitude`, `image`). Latitude/longitude are optional but must be supplied as a valid pair. |
 | `PATCH` | `/api/reports/:id/status` | Authority | `{ "status": "Pending" \| "In Progress" \| "Resolved" }` |
 | `DELETE` | `/api/reports/:id` | Authority | Delete a report and its image |
 | `POST` | `/api/auth/register` | – | `{ name, email, password, role, inviteCode? }` |
@@ -316,7 +318,7 @@ This replaced a synchronous call that blocked submissions for up to two minutes.
 npm run test:smoke
 ```
 
-Boots the API against a throwaway data directory and asserts 32 behaviours: health, auth lifecycle, invite-gated authority registration, `.gov` escalation rejection, password-gated verification-link reissue, CORS allow/deny, `robots.txt` and `sitemap.xml`, publish-without-waiting triage, host-independent image URLs, MIME rejection, overlong input rejection, role-guarded status updates and deletes, invalid input handling and JSON 404s. CI runs the same suite on every push along with a production build.
+Boots the API against a throwaway data directory and asserts 35 behaviours: health, auth lifecycle, invite-gated authority registration, `.gov` escalation rejection, password-gated verification-link reissue, CORS allow/deny, `robots.txt` and `sitemap.xml`, publish-without-waiting triage, host-independent image URLs, MIME rejection, overlong input rejection, map-coordinate validation, role-guarded status updates and deletes, invalid input handling and JSON 404s. CI runs the same suite on every push along with a production build.
 
 ## Hackathon evidence
 
@@ -329,7 +331,7 @@ The same conversation is also readable in chat form with no tooling: [`docs/copi
 - Reports are stored as a JSON document, not in SQLite: fine for a demo-scale deployment, not for concurrent multi-instance scaling.
 - Status changes do not yet record an audit trail (actor, timestamp, note).
 - Email verification is required, so a deployment without SMTP cannot onboard users unless `RETURN_VERIFICATION_LINK` is enabled.
-- No automated UI tests in CI; Playwright checks for layout, modal accessibility and form submission were run manually.
+- No automated UI tests in CI; Playwright checks for layout, modal accessibility, form submission and the map/location picker were run manually.
 - The free Render deployment uses ephemeral storage: the 12 demo incidents reseed, but user accounts, reports and uploads reset on restart/redeploy. Use the Starter disk for persistence.
 - AI triage depends on the Gemini free-tier quota (20 reports/day for `gemini-3.8-flash`); exhausted quota degrades gracefully to manual review.
 

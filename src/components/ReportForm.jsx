@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createReport } from "../services/api.js";
 import { optimizeImageForUpload } from "../services/imageOptimizer.js";
+import { LocationPicker } from "./IncidentMap.jsx";
 
 const MAX_DESCRIPTION_LENGTH = 4000;
 
@@ -10,6 +11,7 @@ export default function ReportForm({ onSubmit }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [location, setLocation] = useState(null);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -18,6 +20,10 @@ export default function ReportForm({ onSubmit }) {
     const formData = new FormData(formElement);
     const imageInput = formElement.elements.namedItem("image");
     if (formData.get("category") !== "Other") formData.delete("customCategory");
+    if (location) {
+      formData.set("latitude", location.lat.toFixed(6));
+      formData.set("longitude", location.lng.toFixed(6));
+    }
 
     setIsSubmitting(true);
     setSubmitError("");
@@ -36,6 +42,7 @@ export default function ReportForm({ onSubmit }) {
       formElement.reset();
       setSelectedCategory("");
       setDescriptionLength(0);
+      setLocation(null);
       setSubmitSuccess(true);
       onSubmit?.(report);
     } catch (error) {
@@ -152,6 +159,8 @@ export default function ReportForm({ onSubmit }) {
             type="text"
           />
         </div>
+
+        <LocationPicker onChange={setLocation} value={location} />
 
         <div>
           <label

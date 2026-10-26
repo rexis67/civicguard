@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getReports } from "../services/api.js";
+import { IncidentMap } from "./IncidentMap.jsx";
 
 const REFRESH_INTERVAL_MS = 5000;
 
@@ -54,6 +55,12 @@ function getUrgency(value, severity) {
   return "low";
 }
 
+function getCoordinate(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 function getReportDetails(report) {
   const analysis =
     report.analysis && typeof report.analysis === "object" ? report.analysis : {};
@@ -78,6 +85,15 @@ function getReportDetails(report) {
     report.analysisStatus === "pending" || report.analysisStatus === "failed"
       ? report.analysisStatus
       : "complete";
+  const latitude = getCoordinate(report.location?.lat ?? report.latitude);
+  const longitude = getCoordinate(report.location?.lng ?? report.longitude);
+  const hasLocation =
+    latitude !== null &&
+    longitude !== null &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180;
 
   return {
     id: report.id,
@@ -91,9 +107,11 @@ function getReportDetails(report) {
     urgency,
     analysisStatus,
     status: typeof report.status === "string" ? report.status : "Pending",
-      tags: Array.isArray(analysis.tags) ? analysis.tags.filter((tag) => typeof tag === "string") : [],
-      hasImage: Boolean(report.image),
-      imageUrl: typeof report.image?.url === "string" ? report.image.url : null,
+    tags: Array.isArray(analysis.tags) ? analysis.tags.filter((tag) => typeof tag === "string") : [],
+    hasImage: Boolean(report.image),
+    imageUrl: typeof report.image?.url === "string" ? report.image.url : null,
+    lat: hasLocation ? latitude : null,
+    lng: hasLocation ? longitude : null,
     timestamp:
       date && !Number.isNaN(date.getTime())
         ? new Intl.DateTimeFormat(undefined, {
@@ -289,6 +307,13 @@ export default function ReportFeed() {
   }, [reportDetails, search, categoryFilter, urgencyFilter, districtFilter]);
   const reportGridColumns =
     filteredReports.length === 4 ? "lg:grid-cols-2" : "lg:grid-cols-3";
+  const mappedReports = useMemo(
+    () =>
+      filteredReports.filter(
+        (report) => Number.isFinite(report.lat) && Number.isFinite(report.lng),
+      ),
+    [filteredReports],
+  );
   const districts = useMemo(
     () => ["All districts", ...new Set(reportDetails.map((report) => report.district).filter(Boolean))],
     [reportDetails],
@@ -404,6 +429,44 @@ export default function ReportFeed() {
         </div>
       </div>
 
+      <div className="mb-6 overflow-hidden rounded-xl border border-white/[0.06] bg-panel shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.06] px-4 py-3 sm:px-5">
+          <div>
+            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan">
+              Incident map
+            </p>
+            <p className="mt-1 font-mono text-[9px] text-muted/70">
+              {mappedReports.length} of {filteredReports.length} filtered{" "}
+              {filteredReports.length === 1 ? "incident" : "incidents"} pinned
+            </p>
+          </div>
+          <p className="hidden font-mono text-[9px] text-muted/60 sm:block">
+            Click a marker to jump to its report
+          </p>
+        </div>
+
+        {mappedReports.length > 0 ? (
+          <IncidentMap
+            onSelect={(reportId) => {
+              const card = document.getElementById(`report-${reportId}`);
+              const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+              card?.scrollIntoView({
+                behavior: reduceMotion ? "auto" : "smooth",
+                block: "center",
+              });
+            }}
+            reports={mappedReports}
+          />
+        ) : (
+          <div className="grid min-h-48 place-items-center px-6 py-10 text-center">
+            <p className="max-w-md font-mono text-[10px] leading-5 text-muted/70">
+              No mapped incidents match these filters. Reports submitted without a
+              location still appear in the list below.
+            </p>
+          </div>
+        )}
+      </div>
+
       {error && (
         <div className="mb-5 flex flex-col gap-3 rounded-xl border border-alert/20 bg-alert/10 p-6 sm:flex-row sm:items-center sm:justify-between">
           <p aria-live="polite" className="text-sm text-alert" role="alert">
@@ -444,6 +507,7 @@ export default function ReportFeed() {
                     ? "border-alert/20"
                     : "border-white/[0.06]"
                 }`}
+                id={report.id ? `report-${report.id}` : undefined}
                 key={report.id ?? `${report.title}-${report.timestamp}-${index}`}
               >
                 <div className={`border-b border-white/[0.04] bg-gradient-to-b px-5 pb-4 pt-5 ${report.urgency === "critical" ? "from-alert/10" : "from-cyan/[0.06]"} to-transparent`}>

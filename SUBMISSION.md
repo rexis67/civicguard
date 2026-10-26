@@ -16,7 +16,7 @@ Municipal issues arrive through phone lines, email, social media and walk-ins, e
 
 | Actor | Experience |
 |---|---|
-| **Citizen** | Report a pothole, streetlight, accessibility blocker or sanitation issue with a photo, district and description. No account needed. Watch the live feed update and see severity/urgency as AI finishes triage. |
+| **Citizen** | Report a pothole, streetlight, accessibility blocker or sanitation issue with a photo, district and description. Pin the location on a map or use browser geolocation. No account needed. Watch the live feed and incident map update as AI finishes triage. |
 | **AI triage** | Classifies the category, scores severity 1–5, assigns urgency, writes a factual summary and keyword tags. Runs **after** the HTTP response, so submission feels instant. |
 | **Authority** | Invite-only dashboard with totals, critical counts, resolution rate, inline Pending → In Progress → Resolved workflow, CSV export and delete. |
 
@@ -25,12 +25,13 @@ Municipal issues arrive through phone lines, email, social media and walk-ins, e
 - **One deployable service.** Express serves the API, the SPA and uploaded images behind one URL. No cross-origin setup, no second host, no static-site/API drift.
 - **Asynchronous AI with graceful degradation.** A slow or failed model call never blocks a citizen or loses a report: the card shows *Analyzing* → *Manual review*, and staff can still work it.
 - **Designed for the failure case.** Server-side input caps, MIME allowlist, rate limits, invite-gated authority signup, password-gated verification-link reissue, deny-by-default CORS, CSP/helmet, atomic JSON writes, timing-safe invite comparison, JSON 404s for `/api`.
-- **Demo without quota.** `SEED_DEMO_DATA=true` loads 12 realistic incidents with pre-computed triage into an empty volume on first boot — the live demo is never empty and needs no AI calls.
+- **Map-first triage.** Every incident can carry a precise location. The feed plots severity-coloured pins on a dark Leaflet map; clicking a pin jumps to the full report card. Citizens can drop a pin, drag it, or use browser geolocation, so staff see the actual cluster instead of a free-text district alone.
+- **Demo without quota.** `SEED_DEMO_DATA=true` loads 12 realistic incidents with pre-computed triage into an empty volume on first boot — the live demo is never empty, needs no AI calls, and the 12 demo reports are already pinned around Bengaluru.
 - **Fast where it matters.** Custom cursor rewritten to 1:1 rAF tracking (zero layout reads per pointer event), photo downscaling before upload, newest-first feed, 5-second sync with in-flight request de-duplication.
 
 ## Stack
 
-React 18 · Vite 6 · Tailwind CSS 3 · Express 4 · SQLite (better-sqlite3) · Google Gemini · Docker · GitHub Actions
+React 18 · Vite 6 · Tailwind CSS 3 · Leaflet · Express 4 · SQLite (better-sqlite3) · Google Gemini · Docker · GitHub Actions
 
 ## Architecture in one paragraph
 
@@ -38,9 +39,9 @@ The SPA talks only to `/api` on the same origin. Express validates and persists 
 
 ## Three-minute demo script
 
-1. **Open the feed.** 12 incidents, newest first, with severity bars, urgency badges and districts. Point out the *Auto-sync · 5 sec* indicator.
-2. **Filter.** Click *Pothole*, then pick *Critical* urgency — the list narrows instantly, client-side.
-3. **Submit a report.** Fill in a title and description, attach a photo, submit. It appears immediately with an **Analyzing** badge while triage runs. (With a live key it resolves in ~90 s; with the seeded data the triage state is already populated.)
+1. **Open the feed.** 12 incidents on a severity-coloured map, newest first below it, with severity bars, urgency badges and districts. Point out the *Auto-sync · 5 sec* indicator.
+2. **Filter.** Click *Pothole* — the list and the pins narrow instantly, client-side.
+3. **Submit a report.** Fill in a title and description, click the map to pin the location (or use *Use my location*), attach a photo, submit. It appears immediately with an **Analyzing** badge while triage runs, and its pin appears on the map. (With a live key triage resolves in ~90 s; the seeded reports are already triaged.)
 4. **Sign in as authority.** Sign in with the invite code used at registration. With no SMTP configured, the verification link is returned only after the same password is submitted again. Open *Admin Incident Ops*: totals, critical count, resolution rate.
 5. **Close the loop.** Move an incident to *In Progress*, then *Resolved* — the public card reflects it on the next sync. Export the CSV.
 
@@ -54,7 +55,7 @@ The SPA talks only to `/api` on the same origin. Express validates and persists 
 
 **Can it scale?** The JSON store is deliberate for demo size and atomic writes. The seam is `backend/services/db.js` — swap for Postgres without touching routes. Images already support S3.
 
-**Accessibility?** Semantic landmarks, labelled inputs, `aria-live` status regions, keyboard-reachable controls, visible focus rings, a skip link, modal Escape/focus trap, and a custom cursor disabled for touch, narrow screens and `prefers-reduced-motion`. Fonts are self-hosted, and there is no analytics or third-party tracking; privacy and terms pages are linked in the footer.
+**Accessibility?** Semantic landmarks, labelled inputs, `aria-live` status regions, keyboard-reachable controls, visible focus rings, a skip link, modal Escape/focus trap, and a custom cursor disabled for touch, narrow screens and `prefers-reduced-motion`. The map is progressive enhancement: every pinned incident also appears as a full text card, and markers are keyboard-focusable buttons. Fonts are self-hosted, and there is no analytics or third-party tracking; privacy and terms pages are linked in the footer.
 
 ## Known limitations
 

@@ -240,6 +240,8 @@ try {
   const form = new FormData();
   form.set("description", "Pothole on 5th and Main, roughly two feet wide.");
   form.set("district", "North");
+  form.set("latitude", "12.9716");
+  form.set("longitude", "77.5946");
   const created = await fetch(`${BASE}/api/reports`, { method: "POST", body: form });
   const createdReport = await created.json();
   check(
@@ -247,6 +249,29 @@ try {
     created.status === 201 && createdReport.analysisStatus === "pending",
     `status=${created.status}`,
   );
+  check(
+    "valid map location is stored",
+    createdReport.location?.lat === 12.9716 && createdReport.location?.lng === 77.5946,
+  );
+
+  const partialLocationForm = new FormData();
+  partialLocationForm.set("description", "Pothole with only half a coordinate pair.");
+  partialLocationForm.set("latitude", "12.9716");
+  const partialLocationResponse = await fetch(`${BASE}/api/reports`, {
+    method: "POST",
+    body: partialLocationForm,
+  });
+  check("partial map coordinates rejected -> 400", partialLocationResponse.status === 400);
+
+  const outOfRangeLocationForm = new FormData();
+  outOfRangeLocationForm.set("description", "Pothole outside the valid coordinate range.");
+  outOfRangeLocationForm.set("latitude", "120");
+  outOfRangeLocationForm.set("longitude", "77.5946");
+  const outOfRangeLocationResponse = await fetch(`${BASE}/api/reports`, {
+    method: "POST",
+    body: outOfRangeLocationForm,
+  });
+  check("out-of-range map coordinates rejected -> 400", outOfRangeLocationResponse.status === 400);
 
   const duplicateStatus = await jsonRequest(
     "PATCH",
