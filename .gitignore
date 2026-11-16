@@ -1,10 +1,23 @@
 node_modules/
-dist/
-*.local
-.env*
+.env
+.env.local
+.env.*.local
 !.env.example
+!backend/.env.example
+.jwt-secret
+dist/
+build/
+playwright-report/
+test-results/
+uploads/
+*.sqlite*
+*.sqlite*-*
+*.local
 
 # Local runtime data
+*.db
+*.db-shm
+*.db-wal
 backend/reports.json
 backend/reports.json.tmp
 backend/users.json

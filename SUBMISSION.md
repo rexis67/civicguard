@@ -24,10 +24,10 @@ Municipal issues arrive through phone lines, email, social media and walk-ins, e
 
 - **One deployable service.** Express serves the API, the SPA and uploaded images behind one URL. No cross-origin setup, no second host, no static-site/API drift.
 - **Asynchronous AI with graceful degradation.** A slow or failed model call never blocks a citizen or loses a report: the card shows *Analyzing* → *Manual review*, and staff can still work it.
-- **Designed for the failure case.** Server-side input caps, MIME allowlist, rate limits, invite-gated authority signup, password-gated verification-link reissue, deny-by-default CORS, CSP/helmet, atomic JSON writes, timing-safe invite comparison, JSON 404s for `/api`.
+- **Designed for the failure case.** Server-side input caps, disk-backed image uploads, MIME allowlist, rate limits, invite-gated authority signup, password-gated verification-link reissue, deny-by-default CORS, CSP/helmet, transactional SQLite writes, timing-safe invite comparison, JSON 404s for `/api`.
 - **Map-first triage.** Every incident can carry a precise location. The feed plots severity-coloured pins on a dark Leaflet map; clicking a pin jumps to the full report card. Citizens can drop a pin, drag it, or use browser geolocation, so staff see the actual cluster instead of a free-text district alone.
 - **Demo without quota.** `SEED_DEMO_DATA=true` loads 12 realistic incidents with pre-computed triage into an empty volume on first boot — the live demo is never empty, needs no AI calls, and the 12 demo reports are already pinned around Bengaluru.
-- **Fast where it matters.** Custom cursor rewritten to 1:1 rAF tracking (zero layout reads per pointer event), photo downscaling before upload, newest-first feed, 5-second sync with in-flight request de-duplication.
+- **Fast where it matters.** Custom cursor rewritten to 1:1 rAF tracking (zero layout reads per pointer event), photo downscaling before disk-backed upload, indexed and paginated newest-first feed, 5-second sync with in-flight request de-duplication.
 
 ## Stack
 
@@ -35,12 +35,12 @@ React 18 · Vite 6 · Tailwind CSS 3 · Leaflet · Express 4 · SQLite (better-s
 
 ## Architecture in one paragraph
 
-The SPA talks only to `/api` on the same origin. Express validates and persists the report to an atomic JSON store, returns `201` immediately, and continues triage in the background. When Gemini responds, the analysis is patched onto the record (`analysisStatus: complete|failed`). Users live in SQLite with bcrypt hashes and signed JWTs; authority routes are role-guarded. Images go to local disk (`/uploads`) or S3 depending on `REPORT_IMAGE_STORAGE`.
+The SPA talks only to `/api` on the same origin. Express validates and persists reports in SQLite, returns `201` immediately, and continues triage in the background. Report reads are paginated, and nearby same-category reports are de-duplicated within a 24-hour window. When Gemini responds, the analysis is patched onto the record (`analysisStatus: complete|failed`); failed triage can be retried from the feed. New reports appear optimistically while the submission request completes. Users live in SQLite with bcrypt hashes and signed JWTs; authority routes are role-guarded. Images are streamed to disk before local storage or S3 upload.
 
 ## Three-minute demo script
 
 1. **Open the feed.** 12 incidents on a severity-coloured map, newest first below it, with severity bars, urgency badges and districts. Point out the *Auto-sync · 5 sec* indicator.
-2. **Filter.** Click *Pothole* — the list and the pins narrow instantly, client-side.
+2. **Filter.** Click *Pothole* — the current report page and its pins narrow instantly, client-side.
 3. **Submit a report.** Fill in a title and description, click the map to pin the location (or use *Use my location*), attach a photo, submit. It appears immediately with an **Analyzing** badge while triage runs, and its pin appears on the map. (With a live key triage resolves in ~90 s; the seeded reports are already triaged.)
 4. **Sign in as authority.** Sign in with the invite code used at registration. With no SMTP configured, the verification link is returned only after the same password is submitted again. Open *Admin Incident Ops*: totals, critical count, resolution rate.
 5. **Close the loop.** Move an incident to *In Progress*, then *Resolved* — the public card reflects it on the next sync. Export the CSV.
@@ -53,15 +53,14 @@ The SPA talks only to `/api` on the same origin. Express validates and persists 
 
 **How do you stop bad input?** 4,000-char description cap, 120-char title, 10 MB image limit, MIME allowlist, rate limits per IP, and explicit type/shape checks before anything reaches storage.
 
-**Can it scale?** The JSON store is deliberate for demo size and atomic writes. The seam is `backend/services/db.js` — swap for Postgres without touching routes. Images already support S3.
+**Can it scale?** SQLite provides durable, indexed report storage and paginated reads on a single node. Multi-instance writes need a shared database such as Postgres; images already support S3.
 
 **Accessibility?** Semantic landmarks, labelled inputs, `aria-live` status regions, keyboard-reachable controls, visible focus rings, a skip link, modal Escape/focus trap, and a custom cursor disabled for touch, narrow screens and `prefers-reduced-motion`. The map is progressive enhancement: every pinned incident also appears as a full text card, and markers are keyboard-focusable buttons. Fonts are self-hosted, and there is no analytics or third-party tracking; privacy and terms pages are linked in the footer.
 
 ## Known limitations
 
-- Single-instance report store (JSON); horizontal scaling needs Postgres.
+- SQLite report storage is single-node; horizontal scaling needs a shared database such as Postgres.
 - AI triage is text + first image only, English.
-- No duplicate clustering yet; nearby duplicates are a natural next step.
 - No SMTP in the demo blueprint, so the verification link is echoed only after the account password is proved. Turn `RETURN_VERIFICATION_LINK` off once mail is configured.
 - The free Render deployment has ephemeral `/data`: demo incidents reseed on boot, but user accounts, reports and uploads reset on restart. Switch to Starter with a disk for persistence.
 

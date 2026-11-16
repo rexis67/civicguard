@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 
-export default function LoginModal({ isOpen, onClose, onSuccess }) {
-  const { login, register, resendVerification } = useAuth();
+export default function LoginModal({ isOpen, onClose, onSuccess, resetToken }) {
+  const { login, register, resendVerification, forgotPassword, resetPassword } = useAuth();
   const [mode, setMode] = useState("login");
   const [role, setRole] = useState("citizen");
   const [name, setName] = useState("");
@@ -10,6 +10,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
   const [password, setPassword] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   const [verificationInfo, setVerificationInfo] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -20,10 +21,18 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
     onCloseRef.current = () => {
       setPassword("");
       setError("");
+      setStatusMessage("");
       setVerificationInfo(null);
       onClose();
     };
   }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen || !resetToken) return;
+    setMode("reset");
+    setError("");
+    setStatusMessage("");
+  }, [isOpen, resetToken]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -85,10 +94,18 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
         const user = await login({ email, password });
         onSuccess?.(user);
         onCloseRef.current();
-      } else {
+      } else if (mode === "register") {
         const result = await register({ name, email, password, role, inviteCode });
         setVerificationInfo(result);
         setError("");
+      } else if (mode === "forgot") {
+        const result = await forgotPassword(email);
+        setStatusMessage(result.message);
+      } else {
+        const result = await resetPassword(resetToken, password);
+        setStatusMessage(result.message);
+        setPassword("");
+        setMode("login");
       }
     } catch (submitError) {
       setError(submitError.message || "Authentication failed. Please try again.");
@@ -116,7 +133,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-deep/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/45 p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onCloseRef.current();
       }}
@@ -124,29 +141,39 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
       <section
         aria-labelledby="auth-modal-title"
         aria-modal="true"
-        className="my-8 w-full max-w-md overflow-hidden rounded-xl border border-white/10 bg-panel shadow-2xl shadow-black/40"
+        className="my-8 w-full max-w-md overflow-hidden rounded-xl border border-line bg-panel shadow"
         ref={dialogRef}
         role="dialog"
         tabIndex={-1}
       >
-        <div className="border-b border-white/[0.06] px-6 pb-5 pt-6">
+        <div className="border-b border-slate-200 dark:border-white/[0.06] px-6 pb-5 pt-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan">
+              <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-brand">
                 CivicGuard identity / secure access
               </p>
               <h2 className="mt-2 font-display text-2xl font-semibold text-ink" id="auth-modal-title">
-                {mode === "login" ? "Welcome back" : "Create your account"}
+                {mode === "login"
+                  ? "Welcome back"
+                  : mode === "register"
+                    ? "Create your account"
+                    : mode === "forgot"
+                      ? "Reset your password"
+                      : "Choose a new password"}
               </h2>
               <p className="mt-1 text-sm text-muted">
                 {mode === "login"
                   ? "Sign in to access your CivicGuard workspace."
-                  : "Join your community’s incident response network."}
+                  : mode === "register"
+                    ? "Join your community’s incident response network."
+                    : mode === "forgot"
+                      ? "We’ll email a reset link if an account matches your address."
+                      : "Choose a new password for your CivicGuard account."}
               </p>
             </div>
             <button
               aria-label="Close authentication dialog"
-              className="rounded border border-white/10 bg-panel-raised px-2.5 py-1.5 font-mono text-xs text-muted hover:text-ink"
+              className="rounded border border-slate-200 dark:border-white/10 bg-panel-raised px-2.5 py-1.5 font-mono text-xs text-muted hover:text-ink"
               onClick={() => onCloseRef.current()}
               type="button"
             >
@@ -154,34 +181,37 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
             </button>
           </div>
 
-          <div className="mt-5 inline-flex rounded-lg border border-white/[0.06] bg-deep p-1">
-            {[
-              { id: "login", label: "Sign in" },
-              { id: "register", label: "Register" },
-            ].map((item) => (
-              <button
-                aria-pressed={mode === item.id}
-                className={`rounded px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-wide transition ${
-                  mode === item.id ? "bg-cyan text-[#06202a]" : "text-muted hover:text-ink"
-                }`}
-                key={item.id}
-                onClick={() => {
-                  setMode(item.id);
-                  setError("");
-                  setVerificationInfo(null);
-                }}
-                type="button"
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+          {["login", "register"].includes(mode) && (
+            <div className="mt-5 inline-flex rounded-lg border border-slate-200 dark:border-white/[0.06] bg-deep p-1">
+              {[
+                { id: "login", label: "Sign in" },
+                { id: "register", label: "Register" },
+              ].map((item) => (
+                <button
+                  aria-pressed={mode === item.id}
+                  className={`rounded px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-wide transition ${
+                    mode === item.id ? "bg-cyan text-white dark:text-slate-900" : "text-muted hover:text-ink"
+                  }`}
+                  key={item.id}
+                  onClick={() => {
+                    setMode(item.id);
+                    setError("");
+                    setStatusMessage("");
+                    setVerificationInfo(null);
+                  }}
+                  type="button"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <form className="space-y-4 px-6 py-5" onSubmit={handleSubmit}>
           {verificationInfo && (
-            <div className="space-y-3 rounded-lg border border-mint/20 bg-mint/10 p-4 text-sm text-ink" role="status">
-              <p className="font-semibold text-mint">Verify your email to activate your account.</p>
+            <div className="space-y-3 rounded-lg border border-resolved/25 bg-resolved/5 p-4 text-sm text-ink" role="status">
+              <p className="font-semibold text-resolved">Verify your email to activate your account.</p>
               <p className="text-muted">
                 {verificationInfo.verificationUrl
                   ? "Email delivery is not configured on this deployment, so use the direct link below to activate your account. It expires in 24 hours."
@@ -189,7 +219,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
               </p>
               {verificationInfo.verificationUrl && (
                 <a
-                  className="inline-flex rounded border border-cyan/30 bg-cyan/10 px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-wide text-cyan hover:bg-cyan/15"
+                  className="inline-flex min-h-11 items-center rounded-lg border border-line bg-panel-raised px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-wide text-brand hover:bg-panel-hover focus:outline-none focus:ring-2 focus:ring-brand"
                   href={verificationInfo.verificationUrl}
                 >
                   Verify email now
@@ -206,13 +236,19 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
             </div>
           )}
 
+          {statusMessage && (
+            <p className="rounded-lg border border-resolved/25 bg-resolved/5 px-3 py-2.5 text-sm text-resolved" role="status">
+              {statusMessage}
+            </p>
+          )}
+
           {mode === "register" && (
             <>
               <fieldset>
                 <legend className="mb-2 font-mono text-[9px] font-semibold uppercase tracking-wider text-muted">
                   Registration type
                 </legend>
-                <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/[0.06] bg-deep p-1">
+                <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-200 dark:border-white/[0.06] bg-deep p-1">
                   {[
                     { id: "citizen", label: "Citizen" },
                     { id: "authority", label: "Authority Member" },
@@ -240,7 +276,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
                 </span>
                 <input
                   autoComplete="name"
-                  className="w-full rounded border border-white/10 bg-deep px-3.5 py-2.5 text-sm text-ink outline-none placeholder:text-muted/50 focus:border-cyan focus:ring-2 focus:ring-cyan/20"
+                  className="min-h-11 w-full rounded-lg border border-line bg-panel-raised px-3.5 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand/20"
                   maxLength={100}
                   onChange={(event) => setName(event.target.value)}
                   required
@@ -250,39 +286,55 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
             </>
           )}
 
-          <label className="block">
+          {mode !== "reset" && <label className="block">
             <span className="mb-2 block font-mono text-[9px] font-semibold uppercase tracking-wider text-muted">
               Email address
             </span>
             <input
               autoComplete="email"
-              className="w-full rounded border border-white/10 bg-deep px-3.5 py-2.5 text-sm text-ink outline-none placeholder:text-muted/50 focus:border-cyan focus:ring-2 focus:ring-cyan/20"
+              className="min-h-11 w-full rounded-lg border border-line bg-panel-raised px-3.5 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand/20"
               onChange={(event) => setEmail(event.target.value)}
               required
               type="email"
               value={email}
             />
-          </label>
+          </label>}
 
-          <label className="block">
-            <span className="mb-2 block font-mono text-[9px] font-semibold uppercase tracking-wider text-muted">
-              Password
-            </span>
-            <input
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              className="w-full rounded border border-white/10 bg-deep px-3.5 py-2.5 text-sm text-ink outline-none placeholder:text-muted/50 focus:border-cyan focus:ring-2 focus:ring-cyan/20"
-              minLength={8}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              type="password"
-              value={password}
-            />
-            {mode === "register" && (
-              <span className="mt-1 block font-mono text-[9px] text-muted/70">
-                Use at least 8 characters.
+          {["login", "register", "reset"].includes(mode) && (
+            <label className="block">
+              <span className="mb-2 block font-mono text-[9px] font-semibold uppercase tracking-wider text-muted">
+                {mode === "reset" ? "New password" : "Password"}
               </span>
-            )}
-          </label>
+              <input
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                className="min-h-11 w-full rounded-lg border border-line bg-panel-raised px-3.5 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand/20"
+                minLength={8}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                type="password"
+                value={password}
+              />
+              {["register", "reset"].includes(mode) && (
+                <span className="mt-1 block font-mono text-[9px] text-muted/70">
+                  Use at least 8 characters.
+                </span>
+              )}
+            </label>
+          )}
+
+          {mode === "login" && (
+            <button
+              className="font-mono text-[9px] font-semibold uppercase tracking-wide text-cyan underline decoration-cyan/30 underline-offset-4 hover:text-mint"
+              onClick={() => {
+                setMode("forgot");
+                setError("");
+                setStatusMessage("");
+              }}
+              type="button"
+            >
+              Forgot password?
+            </button>
+          )}
 
           {mode === "register" && role === "authority" && (
             <label className="block">
@@ -292,7 +344,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
               </span>
               <input
                 autoComplete="off"
-                className="w-full rounded border border-cyan/20 bg-deep px-3.5 py-2.5 font-mono text-sm text-ink outline-none placeholder:text-muted/50 focus:border-cyan focus:ring-2 focus:ring-cyan/20"
+                className="min-h-11 w-full rounded-lg border border-line bg-panel-raised px-3.5 py-2.5 font-mono text-sm text-ink outline-none placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand/20"
                 onChange={(event) => setInviteCode(event.target.value)}
                 placeholder="Enter official invite code"
                 value={inviteCode}
@@ -310,11 +362,19 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
           )}
 
           {!verificationInfo && <button
-            className="w-full rounded bg-gradient-to-r from-cyan to-mint px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-[#06202a] shadow-[0_0_18px_rgba(76,215,246,0.14)] transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-cyan/40 disabled:cursor-wait disabled:opacity-60"
+            className="min-h-11 w-full rounded-lg bg-cyan px-4 py-3 text-sm font-semibold text-white shadow transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 dark:text-slate-900 dark:focus:ring-offset-slate-900"
             disabled={isSubmitting}
             type="submit"
           >
-            {isSubmitting ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
+            {isSubmitting
+              ? "Please wait…"
+              : mode === "login"
+                ? "Sign in"
+                : mode === "register"
+                  ? "Create account"
+                  : mode === "forgot"
+                    ? "Send reset link"
+                    : "Reset password"}
           </button>}
         </form>
       </section>

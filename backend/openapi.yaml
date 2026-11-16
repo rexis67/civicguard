@@ -1,0 +1,1027 @@
+openapi: 3.1.0
+info:
+  title: CivicGuard API
+  version: 1.0.0
+  description: Municipal incident reporting, triage, authority operations, and account management.
+servers:
+  - url: /api
+    description: Same-origin CivicGuard API
+tags:
+  - name: Health
+  - name: Reports
+  - name: Authentication
+  - name: Users
+  - name: Open311
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Check API and dependency health
+      responses:
+        "200":
+          description: API, SQLite, and image storage are available.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          description: One or more dependencies are degraded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /public-config:
+    get:
+      tags: [Health]
+      summary: Get public browser configuration
+      description: Returns the selected map provider and its browser-visible key, if configured. Restrict provider keys by allowed referrer domains.
+      responses:
+        "200":
+          description: Public UI configuration only.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mapProvider, mapTilerKey]
+                properties:
+                  mapProvider: { type: string, enum: [carto, maptiler] }
+                  mapTilerKey: { type: [string, "null"] }
+  /metrics:
+    get:
+      tags: [Health]
+      summary: Get runtime metrics
+      description: 'Public operational metrics. Returns Prometheus text by default; send `Accept: application/json` or `?format=json` for a JSON snapshot.'
+      parameters:
+        - in: query
+          name: format
+          schema: { type: string, enum: [json] }
+      responses:
+        "200":
+          description: Metrics snapshot.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Metrics" }
+            text/plain:
+              schema: { type: string }
+  /city-health:
+    get:
+      tags: [Reports]
+      summary: Get public city health aggregates
+      description: Aggregate-only metrics from canonical incidents, including coarse 30-day map cells. Cached for 60 seconds.
+      responses:
+        "200":
+          description: City health metrics.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityHealth" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /reports:
+    get:
+      tags: [Reports]
+      summary: List reports
+      description: Limited to 60 requests per minute per IP. Page size defaults to 50 and is capped at 100. Linked duplicates are excluded; use `/admin/reports` for the authority view that includes them.
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: assignedTo
+          description: Filter by authority user ID, or use `unassigned`.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Paginated reports.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    post:
+      tags: [Reports]
+      summary: Submit a report
+      description: Saves the report and returns immediately while AI triage runs in the background. Limited to `REPORT_RATE_LIMIT` submissions per 10 minutes per IP (default 5). A nearby same-category incident from the last 14 days is linked as a duplicate rather than rejected.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [description]
+              properties:
+                description: { type: string, minLength: 1, maxLength: 4000 }
+                title: { type: string, maxLength: 120 }
+                category: { type: string, maxLength: 80 }
+                customCategory: { type: string, maxLength: 80 }
+                district: { type: string, maxLength: 100 }
+                latitude: { type: number, minimum: -90, maximum: 90 }
+                longitude: { type: number, minimum: -180, maximum: 180 }
+                image:
+                  type: string
+                  format: binary
+                  description: Optional JPEG, PNG, or WebP image up to 10 MB.
+      responses:
+        "201":
+          description: Report saved, or linked to an existing nearby incident. Triage is pending and the response may include a `duplicate` object with the canonical incident ID and report count.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Report"
+                  - type: object
+                    properties:
+                      duplicate:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          reportCount: { type: integer }
+                        required: [id, reportCount]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          description: Uploaded image is too large.
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /reports/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ReportId"
+    get:
+      tags: [Reports]
+      summary: Get a report
+      responses:
+        "200":
+          description: Report details.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Reports]
+      summary: Delete a report and its stored image
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: Report deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /track/{code}:
+    parameters:
+      - in: path
+        name: code
+        required: true
+        schema: { type: string, pattern: "^CG-[A-Z0-9]+$" }
+    get:
+      tags: [Reports]
+      summary: Look up a report by public tracking code
+      description: Tracking codes are case-insensitive and resolve to the canonical incident.
+      responses:
+        "200":
+          description: Report matching the tracking code.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /reports/{id}/confirm:
+    parameters:
+      - $ref: "#/components/parameters/ReportId"
+    post:
+      tags: [Reports]
+      summary: Confirm that this device also sees the incident
+      description: Records one community confirmation per device. Confirmation counts can raise urgency at 5, 10, 20 and 50.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceHash]
+              properties:
+                deviceHash:
+                  type: string
+                  pattern: "^[a-fA-F0-9]{64}$"
+                  description: SHA-256 device token generated by the browser.
+      responses:
+        "201":
+          description: Confirmation recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alreadyConfirmed: { type: boolean, const: false }
+                  reportCount: { type: integer }
+                  confirmationCount: { type: integer }
+                  urgencyLevel: { type: string }
+                required: [alreadyConfirmed, reportCount, confirmationCount]
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: This device has already confirmed the incident.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  reportCount: { type: integer }
+                  confirmationCount: { type: integer }
+                  urgencyLevel: { type: string }
+                required: [error]
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /reports/{id}/triage:
+    parameters:
+      - $ref: "#/components/parameters/ReportId"
+    post:
+      tags: [Reports]
+      summary: Retry failed AI triage
+      description: Limited to five requests per minute per IP. Only reports currently marked failed can be retried.
+      responses:
+        "202":
+          description: Triage retry started.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Triage is not in the failed state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /reports/{id}/status:
+    parameters:
+      - $ref: "#/components/parameters/ReportId"
+    patch:
+      tags: [Reports]
+      summary: Change report status
+      description: Each successful update adds an audit record. An optional note is limited to 300 characters. An optional after photo may be attached only when resolving.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [Pending, In Progress, Resolved] }
+                note: { type: [string, "null"], maxLength: 300 }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [Pending, In Progress, Resolved] }
+                note: { type: string, maxLength: 300 }
+                afterPhoto:
+                  type: string
+                  format: binary
+                  description: Optional JPEG, PNG, or WebP proof-of-resolution image. Only allowed when status is Resolved.
+      responses:
+        "200":
+          description: Updated report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /reports/{id}/audits:
+    parameters:
+      - $ref: "#/components/parameters/ReportId"
+    get:
+      tags: [Reports]
+      summary: Get status audit history
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: Audit events ordered newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ReportAudit" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /reports/{id}/field-audits:
+    parameters:
+      - $ref: "#/components/parameters/ReportId"
+    get:
+      tags: [Reports]
+      summary: Get triage field-override history
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: Field audit events ordered newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/FieldAudit" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /reports/{id}/assignment:
+    parameters:
+      - $ref: "#/components/parameters/ReportId"
+    patch:
+      tags: [Reports]
+      summary: Assign or unassign a report
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assignedTo]
+              properties:
+                assignedTo: { type: [string, "null"], description: Verified authority user ID, or null to unassign. }
+      responses:
+        "200":
+          description: Updated report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /reports/{id}/triage-review:
+    parameters:
+      - $ref: "#/components/parameters/ReportId"
+    patch:
+      tags: [Reports]
+      summary: Override AI category or severity
+      description: Records a field audit entry and recomputes SLA routing.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                category: { type: string, minLength: 2, maxLength: 80 }
+                severityScore: { type: integer, minimum: 1, maximum: 5 }
+      responses:
+        "200":
+          description: Updated report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /reports/{id}/split:
+    parameters:
+      - $ref: "#/components/parameters/ReportId"
+    post:
+      tags: [Reports]
+      summary: Detach a linked duplicate into its own incident
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: Detached report and updated parent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  report: { $ref: "#/components/schemas/Report" }
+                  parent: { $ref: "#/components/schemas/Report" }
+                required: [report, parent]
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The report is not a linked duplicate.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /reports/{id}/merge:
+    parameters:
+      - $ref: "#/components/parameters/ReportId"
+    post:
+      tags: [Reports]
+      summary: Merge this report into another open report
+      description: Both reports must share a category and neither can be resolved or already linked.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetId]
+              properties:
+                targetId: { type: string }
+      responses:
+        "200":
+          description: Merged target and source records.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  target: { $ref: "#/components/schemas/Report" }
+                  source: { $ref: "#/components/schemas/Report" }
+                required: [target, source]
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Reports cannot be merged, for example due to category mismatch or a resolved report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /admin/reports:
+    get:
+      tags: [Reports]
+      summary: List reports for authority operations
+      description: Includes linked duplicates. Page size defaults to 100 and is capped at 100. Limited to 60 requests per minute per IP.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: assignedTo
+          description: Filter by authority user ID, or use `unassigned`.
+          schema: { type: string }
+        - in: query
+          name: overdue
+          description: When `true`, keep only reports whose SLA is breached. Filtering is applied to the loaded page.
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Paginated reports including duplicates.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /admin/metrics:
+    get:
+      tags: [Reports]
+      summary: Get impact metrics for authority staff
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: Resolution, triage and category metrics.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImpactMetrics" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /users:
+    get:
+      tags: [Users]
+      summary: List user accounts
+      description: Password hashes and verification/reset tokens are never returned.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: User accounts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /users/{id}/role:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    patch:
+      tags: [Users]
+      summary: Change a user's role
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [citizen, authority] }
+      responses:
+        "200":
+          description: Updated user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Self-demotion or last verified authority restriction.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    delete:
+      tags: [Users]
+      summary: Delete a user account
+      security: [{ cookieAuth: [], bearerAuth: [] }]
+      responses:
+        "200":
+          description: User deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Self-deletion or last verified authority restriction.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a citizen or authority account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, role]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8, maxLength: 72 }
+                role: { type: string, enum: [citizen, authority] }
+                inviteCode: { type: string }
+      responses:
+        "201": { description: Account created; email verification instructions returned. }
+        "202": { description: Registration or verification response intentionally generalized. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: Email is already registered. }
+  /auth/verify-email:
+    post:
+      tags: [Authentication]
+      summary: Verify email and create a session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "200":
+          description: User verified; authentication cookie is set.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Sign in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "200":
+          description: Authenticated user and session cookie.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /auth/session:
+    get:
+      tags: [Authentication]
+      summary: Get current signed-in user
+      security: [{ cookieAuth: [], bearerAuth: [] }]
+      responses:
+        "200": { description: Current user session. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Clear the session cookie
+      responses:
+        "200": { description: Signed out. }
+  /auth/resend-verification:
+    post:
+      tags: [Authentication]
+      summary: Resend email verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "200": { description: Generic verification response. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /auth/forgot-password:
+    post:
+      tags: [Authentication]
+      summary: Request password reset
+      description: Rate-limited; response does not reveal whether the email is registered.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200": { description: Enumeration-safe response. }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /auth/reset-password:
+    post:
+      tags: [Authentication]
+      summary: Reset password with a one-time token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string }
+                password: { type: string, minLength: 8, maxLength: 72 }
+      responses:
+        "200": { description: Password reset. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /services.json:
+    servers:
+      - url: /open311/v2
+        description: Open311 GeoReport v2 bridge (also available under /api/open311/v2)
+    get:
+      tags: [Open311]
+      summary: List available Open311 services
+      responses:
+        "200":
+          description: Configured CivicGuard report categories as Open311 services.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [service_code, service_name, description, metadata, type]
+                  properties:
+                    service_code: { type: string }
+                    service_name: { type: string }
+                    description: { type: string }
+                    metadata: { type: boolean, const: false }
+                    type: { type: string, const: realtime }
+  /requests.json:
+    servers:
+      - url: /open311/v2
+        description: Open311 GeoReport v2 bridge (also available under /api/open311/v2)
+    get:
+      tags: [Open311]
+      summary: List Open311 service requests
+      parameters:
+        - in: query
+          name: service_request_id
+          schema: { type: string }
+          description: One or more comma-separated CivicGuard tracking codes or report IDs.
+        - in: query
+          name: service_code
+          schema: { type: string }
+          description: One or more comma-separated category service codes.
+        - in: query
+          name: status
+          schema: { type: string, enum: [open, closed] }
+        - in: query
+          name: start_date
+          schema: { type: string, format: date-time }
+        - in: query
+          name: end_date
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Matching Open311 service requests.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Open311ServiceRequest" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+    post:
+      tags: [Open311]
+      summary: Create a CivicGuard report through Open311
+      description: Requires service_code and description, plus lat/long or address. Remote media_url uploads are not supported.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Open311CreateRequest" }
+          application/x-www-form-urlencoded:
+            schema: { $ref: "#/components/schemas/Open311CreateRequest" }
+      responses:
+        "200":
+          description: Created service request, returned as a one-item array.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Open311ServiceRequest" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: civicguard_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ReportId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+    UserId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+  responses:
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Authentication is required or invalid.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: The authenticated user lacks required authority.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: Too many requests.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Open311CreateRequest:
+      type: object
+      required: [service_code, description]
+      properties:
+        service_code: { type: string }
+        description: { type: string, minLength: 1, maxLength: 4000 }
+        lat: { type: string }
+        long: { type: string }
+        address: { type: string, maxLength: 100 }
+        zipcode: { type: string, maxLength: 20 }
+    Open311ServiceRequest:
+      type: object
+      required: [service_request_id, status, service_name, service_code, description, requested_datetime]
+      properties:
+        service_request_id: { type: string }
+        status: { type: string, enum: [open, closed] }
+        status_notes: { type: string }
+        service_name: { type: string }
+        service_code: { type: string }
+        description: { type: string }
+        agency_responsible: { type: string }
+        requested_datetime: { type: string, format: date-time }
+        updated_datetime: { type: string, format: date-time }
+        expected_datetime: { type: string, format: date-time }
+        address: { type: string }
+        zipcode: { type: string }
+        lat: { type: string }
+        long: { type: string }
+        media_url: { type: string }
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+        requestId: { type: string }
+      required: [error]
+    Health:
+      type: object
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        uptimeSeconds: { type: integer }
+        database: { type: string, enum: [ok, unavailable] }
+        imageStorage:
+          type: object
+          properties:
+            status: { type: string, enum: [ok, unavailable] }
+            mode: { type: string, enum: [local, s3] }
+          required: [status, mode]
+      required: [status, uptimeSeconds, database, imageStorage]
+    Report:
+      type: object
+      properties:
+        id: { type: string }
+        timestamp: { type: string, format: date-time }
+        title: { type: string }
+        category: { type: string }
+        description: { type: string }
+        analysisStatus: { type: string, enum: [pending, complete, failed] }
+        status: { type: string, enum: [Pending, In Progress, Resolved] }
+        district: { type: string }
+        assignedTo: { type: [string, "null"] }
+        location:
+          oneOf:
+            - type: "null"
+            - type: object
+              properties:
+                lat: { type: number, minimum: -90, maximum: 90 }
+                lng: { type: number, minimum: -180, maximum: 180 }
+              required: [lat, lng]
+        image:
+          oneOf:
+            - type: "null"
+            - type: object
+              properties:
+                url: { type: string, format: uri-reference }
+                mimeType: { type: string }
+                size: { type: integer }
+        analysis: { type: [object, "null"], additionalProperties: true }
+        trackingCode: { type: string }
+        reportCount: { type: integer }
+        confirmationCount: { type: integer }
+        duplicateOf: { type: [string, "null"] }
+        urgencyLevel: { type: string }
+        severityScore: { type: integer, minimum: 1, maximum: 5 }
+        department: { type: string }
+        overdue: { type: boolean }
+        slaDueAt: { type: string, format: date-time }
+        resolutionNote: { type: [string, "null"] }
+        resolvedAt: { type: [string, "null"], format: date-time }
+        triageOverride: { type: [object, "null"], additionalProperties: true }
+        afterPhoto:
+          oneOf:
+            - type: "null"
+            - type: object
+              properties:
+                url: { type: string, format: uri-reference }
+                mimeType: { type: string }
+                size: { type: integer }
+      required: [id, timestamp, title, category, description, analysisStatus, status]
+    ReportPage:
+      type: object
+      properties:
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Report" }
+      required: [total, limit, offset, data]
+    ReportAudit:
+      type: object
+      properties:
+        id: { type: string }
+        reportId: { type: string }
+        actorId: { type: string }
+        actorEmail: { type: string, format: email }
+        previousStatus: { type: [string, "null"] }
+        newStatus: { type: string }
+        note: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+      required: [id, reportId, actorId, actorEmail, newStatus, createdAt]
+    FieldAudit:
+      type: object
+      properties:
+        id: { type: string }
+        reportId: { type: string }
+        field: { type: string, enum: [category, severityScore] }
+        actorId: { type: string }
+        actorEmail: { type: string, format: email }
+        oldValue: { type: string }
+        newValue: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, reportId, field, actorId, actorEmail, oldValue, newValue, createdAt]
+    CityHealth:
+      type: object
+      properties:
+        totalReports: { type: integer }
+        openReports: { type: integer }
+        resolvedReports: { type: integer }
+        averageHoursToResolve: { type: [number, "null"] }
+        resolutionRate: { type: number }
+        resolutionRateByCategory:
+          type: array
+          items:
+            type: object
+            properties:
+              category: { type: string }
+              totalReports: { type: integer }
+              resolvedReports: { type: integer }
+              resolutionRate: { type: number }
+            required: [category, totalReports, resolvedReports, resolutionRate]
+        mapCells:
+          type: array
+          items:
+            type: object
+            properties:
+              lat: { type: number }
+              lng: { type: number }
+              count: { type: integer }
+            required: [lat, lng, count]
+      required: [totalReports, openReports, resolvedReports, averageHoursToResolve, resolutionRate, resolutionRateByCategory, mapCells]
+    ImpactMetrics:
+      type: object
+      properties:
+        averageHoursToTriage: { type: [number, "null"] }
+        averageHoursToResolve: { type: [number, "null"] }
+        resolutionRate: { type: number }
+        reportsByCategory:
+          type: array
+          items:
+            type: object
+            properties:
+              category: { type: string }
+              count: { type: integer }
+            required: [category, count]
+        totalSubmissions: { type: integer }
+      required: [averageHoursToTriage, averageHoursToResolve, resolutionRate, reportsByCategory, totalSubmissions]
+    Metrics:
+      type: object
+      properties:
+        uptimeSeconds: { type: integer }
+        timestamp: { type: string, format: date-time }
+        process: { type: object, additionalProperties: true }
+        http: { type: object, additionalProperties: true }
+        triageQueue: { type: object, additionalProperties: true }
+        aiModel: { type: object, additionalProperties: true }
+      required: [uptimeSeconds, timestamp, process, http, triageQueue, aiModel]
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [citizen, authority] }
+        emailVerified: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      required: [id, name, email, role, emailVerified, createdAt]

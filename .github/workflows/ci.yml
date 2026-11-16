@@ -25,5 +25,14 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Run unit tests
+        run: npm run test:unit
+
       - name: Run API smoke tests
         run: npm run test:smoke
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright UI tests
+        run: npm run test:e2e

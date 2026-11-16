@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import { createReadStream, constants } from "node:fs";
+import { access, chmod, copyFile, mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
@@ -31,10 +37,6 @@ const s3 = storageMode === "s3"
   : null;
 
 const extensionByMimeType = {
-  "image/avif": "avif",
-  "image/gif": "gif",
-  "image/heic": "heic",
-  "image/heif": "heif",
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
@@ -58,6 +60,49 @@ export async function ensureImageStorageReady() {
   if (storageMode === "local") await mkdir(uploadsDirectory, { recursive: true });
 }
 
+export async function checkImageStorageHealth() {
+  if (storageMode === "local") {
+    await ensureImageStorageReady();
+    await access(uploadsDirectory, constants.R_OK | constants.W_OK);
+    const probeFile = path.join(uploadsDirectory, `.health-${randomUUID()}`);
+    try {
+      await writeFile(probeFile, "", { flag: "wx", mode: 0o600 });
+    } finally {
+      await unlink(probeFile).catch((error) => {
+        if (error.code !== "ENOENT") throw error;
+      });
+    }
+    return { status: "ok", mode: storageMode };
+  }
+
+  if (!s3 || !bucket || !region || !publicBaseUrl) {
+    throw new Error("S3 image storage is not configured.");
+  }
+  await s3.config.credentials();
+  return { status: "ok", mode: storageMode };
+}
+
+export async function getStoredImageForTriage(image) {
+  if (!image?.objectKey || !image.mimeType) return null;
+
+  if (image.storage === "s3") {
+    const result = await s3.send(new GetObjectCommand({
+      Bucket: bucket,
+      Key: image.objectKey,
+    }));
+    if (!result.Body) throw new Error("Stored report image has no response body.");
+    return {
+      buffer: Buffer.from(await result.Body.transformToByteArray()),
+      mimetype: image.mimeType,
+    };
+  }
+
+  return {
+    path: path.join(uploadsDirectory, path.basename(image.objectKey)),
+    mimetype: image.mimeType,
+  };
+}
+
 export async function storeReportImage({ reportId, file }) {
   if (!file) return null;
 
@@ -69,7 +114,8 @@ export async function storeReportImage({ reportId, file }) {
     await s3.send(new PutObjectCommand({
       Bucket: bucket,
       Key: objectKey,
-      Body: file.buffer,
+      Body: file.path ? createReadStream(file.path) : file.buffer,
+      ...(file.size ? { ContentLength: file.size } : {}),
       ContentType: file.mimetype,
       CacheControl: "public, max-age=31536000, immutable",
     }));
@@ -85,10 +131,28 @@ export async function storeReportImage({ reportId, file }) {
 
   await ensureImageStorageReady();
   const fileName = path.basename(objectKey);
-  await writeFile(path.join(uploadsDirectory, fileName), file.buffer, {
-    flag: "wx",
-    mode: 0o600,
-  });
+  const destination = path.join(uploadsDirectory, fileName);
+  if (file.path) {
+    let copied = false;
+    try {
+      await copyFile(file.path, destination, constants.COPYFILE_EXCL);
+      copied = true;
+      await chmod(destination, 0o600);
+      await unlink(file.path);
+      file.path = destination;
+    } catch (error) {
+      if (copied) {
+        await unlink(destination).catch((cleanupError) => {
+          if (cleanupError.code !== "ENOENT") {
+            console.error("[images] Could not remove incomplete stored upload:", cleanupError);
+          }
+        });
+      }
+      throw error;
+    }
+  } else {
+    await writeFile(destination, file.buffer, { flag: "wx", mode: 0o600 });
+  }
   // Relative URLs keep working behind a proxy and on any hostname. Set
   // API_PUBLIC_BASE_URL only when images are served from a different origin.
   const apiBaseUrl = (process.env.API_PUBLIC_BASE_URL ?? "").replace(/\/$/, "");

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
@@ -8,14 +8,25 @@ import jwt from "jsonwebtoken";
 import {
   deleteUnverifiedUser,
   getUserByEmail,
+  resetPasswordWithToken,
+  savePasswordResetToken,
   saveUser,
   setEmailVerification,
   updateEmailVerification,
   verifyUserEmail,
 } from "../services/db.js";
+import {
+  hasValidInviteCode,
+  isAllowlistedAuthorityEmail,
+  isValidEmail,
+  normalizeRole,
+  parseAuthorityEmailDomains,
+} from "../services/authValidation.js";
+import { clearAuthCookie, setAuthCookie } from "../services/authCookie.js";
 import { getJwtSecret } from "../services/jwtSecret.js";
-import { sendVerificationEmail } from "../services/mailer.js";
+import { sendPasswordResetEmail, sendVerificationEmail } from "../services/mailer.js";
 import { getVerificationBaseUrl } from "../services/siteUrl.js";
+import { verifyToken } from "../middleware/auth.js";
 
 // Load the backend-local environment file before reading module-level settings.
 dotenv.config({ path: fileURLToPath(new URL("../.env", import.meta.url)) });
@@ -23,10 +34,19 @@ dotenv.config({ path: fileURLToPath(new URL("../.env", import.meta.url)) });
 const router = express.Router();
 const PASSWORD_MIN_LENGTH = 8;
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 15 * 60 * 1000;
 const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
 
 const configuredAuthLimit = Number.parseInt(process.env.AUTH_RATE_LIMIT ?? "60", 10);
 const configuredLoginLimit = Number.parseInt(process.env.LOGIN_RATE_LIMIT ?? "10", 10);
+
+const forgotPasswordLimiter = rateLimit({
+  windowMs: AUTH_RATE_WINDOW_MS,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "If an account matches that email, password reset instructions will be sent." },
+});
 
 const authLimiter = rateLimit({
   windowMs: AUTH_RATE_WINDOW_MS,
@@ -51,41 +71,9 @@ router.use((_request, response, next) => {
   next();
 });
 
-function normalizeRole(role) {
-  const normalized = typeof role === "string" ? role.trim().toLowerCase() : "";
-  if (normalized === "citizen") return "citizen";
-  if (normalized === "authority" || normalized === "authority member") {
-    return "authority";
-  }
-  return null;
-}
-
-const authorityEmailDomains = (process.env.AUTHORITY_EMAIL_DOMAINS ?? "")
-  .split(",")
-  .map((domain) => domain.trim().toLowerCase().replace(/^@/, ""))
-  .filter(Boolean);
-
-function safeEquals(first, second) {
-  const left = Buffer.from(String(first));
-  const right = Buffer.from(String(second));
-  if (left.length !== right.length) return false;
-  return timingSafeEqual(left, right);
-}
-
-function hasValidInviteCode(inviteCode) {
-  const expected = process.env.AUTHORITY_INVITE_CODE;
-  if (!expected || typeof inviteCode !== "string") return false;
-  return safeEquals(inviteCode, expected);
-}
-
-function isAllowlistedAuthorityEmail(email) {
-  const domain = email.split("@")[1]?.toLowerCase() ?? "";
-  if (!domain) return false;
-
-  return authorityEmailDomains.some(
-    (allowed) => domain === allowed || domain.endsWith(`.${allowed}`),
-  );
-}
+const authorityEmailDomains = parseAuthorityEmailDomains(
+  process.env.AUTHORITY_EMAIL_DOMAINS ?? "",
+);
 
 /**
  * The verification link is only echoed back to the caller when email delivery is
@@ -97,10 +85,6 @@ function shouldReturnVerificationLink() {
   if (setting === "false") return false;
   if (setting === "true") return true;
   return process.env.NODE_ENV !== "production";
-}
-
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function createAuthResponse(user, secret) {
@@ -125,6 +109,12 @@ function createAuthResponse(user, secret) {
   };
 }
 
+function setAuthenticatedResponse(response, user, secret) {
+  const result = createAuthResponse(user, secret);
+  setAuthCookie(response, result.token);
+  response.json(result);
+}
+
 function hashVerificationToken(token) {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -145,6 +135,14 @@ function verificationLink(token) {
   }
 
   return `${origin}/?verifyEmail=${encodeURIComponent(token)}`;
+}
+
+function passwordResetLink(token) {
+  const origin = getVerificationBaseUrl();
+  if (!origin) {
+    throw new Error("Password reset links are not configured on this deployment.");
+  }
+  return `${origin}/?resetPassword=${encodeURIComponent(token)}`;
 }
 
 async function issueVerification(user, existingTokenHash = null) {
@@ -209,8 +207,8 @@ router.post("/register", async (request, response, next) => {
     const normalizedEmail = email.trim().toLowerCase();
     if (
       role === "authority" &&
-      !hasValidInviteCode(inviteCode) &&
-      !isAllowlistedAuthorityEmail(normalizedEmail)
+      !hasValidInviteCode(inviteCode, process.env.AUTHORITY_INVITE_CODE) &&
+      !isAllowlistedAuthorityEmail(normalizedEmail, authorityEmailDomains)
     ) {
       response.status(403).json({
         error: "Authority registration requires a valid invite code.",
@@ -285,10 +283,109 @@ router.post("/verify-email", async (request, response, next) => {
       return;
     }
 
-    response.json(createAuthResponse(user, await getJwtSecret()));
+    setAuthenticatedResponse(response, user, await getJwtSecret());
   } catch (error) {
     next(error);
   }
+});
+
+router.post("/forgot-password", forgotPasswordLimiter, async (request, response, next) => {
+  const genericResponse = {
+    message: "If an account matches that email, password reset instructions will be sent.",
+  };
+
+  try {
+    const email = request.body?.email;
+    if (typeof email !== "string" || !isValidEmail(email.trim())) {
+      response.json(genericResponse);
+      return;
+    }
+
+    const user = await getUserByEmail(email.trim().toLowerCase());
+    if (user?.emailVerified) {
+      const rawToken = randomBytes(32).toString("base64url");
+      try {
+        const delivery = await sendPasswordResetEmail({
+          email: user.email,
+          name: user.name,
+          resetUrl: passwordResetLink(rawToken),
+        });
+        if (delivery.delivered) {
+          await savePasswordResetToken(
+            user.id,
+            hashVerificationToken(rawToken),
+            Date.now() + PASSWORD_RESET_TTL_MS,
+          );
+        } else {
+          console.warn("[auth] Password reset email not sent because SMTP is not configured.");
+        }
+      } catch (error) {
+        console.error("[auth] Password reset email could not be sent:", error);
+      }
+    }
+
+    response.json(genericResponse);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/reset-password", async (request, response, next) => {
+  try {
+    const { token, password } = request.body ?? {};
+    if (
+      typeof token !== "string" ||
+      token.length < 32 ||
+      token.length > 256 ||
+      typeof password !== "string" ||
+      password.length < PASSWORD_MIN_LENGTH ||
+      Buffer.byteLength(password, "utf8") > 72
+    ) {
+      response.status(400).json({
+        error: "Provide a valid reset token and a password of 8–72 bytes.",
+      });
+      return;
+    }
+
+    const updated = await resetPasswordWithToken(
+      hashVerificationToken(token),
+      await bcrypt.hash(password, 12),
+    );
+    if (!updated) {
+      response.status(400).json({ error: "The password reset link is invalid or expired." });
+      return;
+    }
+
+    clearAuthCookie(response);
+    response.json({ message: "Password reset successfully. Please sign in with your new password." });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/session", verifyToken, async (request, response, next) => {
+  try {
+    const user = await getUserByEmail(request.user.email);
+    if (!user) {
+      response.status(401).json({ error: "Authentication is required." });
+      return;
+    }
+    response.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/logout", (_request, response) => {
+  clearAuthCookie(response);
+  response.json({ message: "Signed out." });
 });
 
 router.post("/resend-verification", async (request, response, next) => {
@@ -341,7 +438,7 @@ router.post("/login", loginLimiter, async (request, response, next) => {
       return;
     }
 
-    response.json(createAuthResponse(user, await getJwtSecret()));
+    setAuthenticatedResponse(response, user, await getJwtSecret());
   } catch (error) {
     next(error);
   }

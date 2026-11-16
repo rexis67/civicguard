@@ -16,7 +16,7 @@ FROM node:22-bookworm
 ENV NODE_ENV=production \
     PORT=5000 \
     SERVE_STATIC=true \
-    CIVICGUARD_DB_PATH=/data/civicguard.sqlite \
+    DB_PATH=/data/civicguard.db \
     CIVICGUARD_REPORTS_PATH=/data/reports.json \
     UPLOAD_DIR=/data/uploads
 

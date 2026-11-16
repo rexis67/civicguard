@@ -42,6 +42,21 @@ export async function sendVerificationEmail({ email, name, verificationUrl }) {
   return { delivered: true };
 }
 
+export async function sendPasswordResetEmail({ email, name, resetUrl }) {
+  const mailer = getTransporter();
+  if (!mailer) return { delivered: false, configured: false };
+
+  await mailer.sendMail({
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to: email,
+    subject: "Reset your CivicGuard password",
+    text: `Hello ${name},\n\nUse this link to reset your CivicGuard password:\n${resetUrl}\n\nThis link expires in 15 minutes. If you did not request a reset, ignore this email.`,
+    html: `<p>Hello ${escapeHtml(name)},</p><p>Use this link to reset your CivicGuard password:</p><p><a href="${escapeHtml(resetUrl)}">Reset password</a></p><p>This link expires in 15 minutes. If you did not request a reset, ignore this email.</p>`,
+  });
+
+  return { delivered: true };
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({
     "&": "&amp;",

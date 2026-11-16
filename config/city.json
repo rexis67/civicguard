@@ -1,0 +1,25 @@
+{
+  "cityName": "Bengaluru",
+  "mapCenter": [12.9716, 77.5946],
+  "departments": [
+    "Roads & Infrastructure",
+    "Electrical Services",
+    "Accessibility Services",
+    "Sanitation",
+    "Municipal Services"
+  ],
+  "categoryDepartments": {
+    "Pothole": "Roads & Infrastructure",
+    "Streetlight": "Electrical Services",
+    "Accessibility": "Accessibility Services",
+    "Garbage": "Sanitation"
+  },
+  "slaHoursBySeverity": {
+    "1": 120,
+    "2": 72,
+    "3": 48,
+    "4": 12,
+    "5": 4
+  },
+  "categories": ["Pothole", "Streetlight", "Accessibility", "Garbage"]
+}

@@ -11,14 +11,21 @@
     "start:backend": "npm --prefix backend start",
     "preview": "vite preview",
     "publish": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish.ps1",
+    "publish:sh": "bash scripts/publish.sh",
     "seed": "node scripts/seed.mjs",
-    "test:smoke": "node scripts/smoke.mjs"
+    "backup": "node scripts/backup-db.mjs",
+    "test:smoke": "node scripts/smoke.mjs",
+    "test:unit": "node --test backend/tests/*.test.js",
+    "test:e2e": "playwright test"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
+    "leaflet.heat": "^1.0.1",
+    "leaflet.markercluster": "^1.5.3",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

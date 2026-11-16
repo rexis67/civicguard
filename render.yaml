@@ -22,6 +22,8 @@ services:
         sync: false
       - key: AUTHORITY_INVITE_CODE
         sync: false
+      - key: MAPTILER_API_KEY
+        sync: false
       - key: AUTHORITY_EMAIL_DOMAINS
         value: ""
       # No SMTP is provisioned by this blueprint, so registration hands the
@@ -29,8 +31,8 @@ services:
       # password. Set to false once SMTP is configured.
       - key: RETURN_VERIFICATION_LINK
         value: "true"
-      - key: CIVICGUARD_DB_PATH
-        value: /data/civicguard.sqlite
+      - key: DB_PATH
+        value: /data/civicguard.db
       - key: CIVICGUARD_REPORTS_PATH
         value: /data/reports.json
       - key: UPLOAD_DIR
