@@ -6,6 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY index.html vite.config.js postcss.config.cjs tailwind.config.cjs ./
+COPY config ./config
 COPY src ./src
 COPY public ./public
 RUN npm run build
@@ -26,6 +27,7 @@ COPY backend/package.json backend/package-lock.json ./backend/
 RUN npm --prefix backend ci --omit=dev --no-audit --no-fund
 
 COPY backend ./backend
+COPY config ./config
 COPY --from=build /app/dist ./dist
 
 RUN mkdir -p /data/uploads
