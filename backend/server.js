@@ -128,6 +128,7 @@ app.use(
               "blob:",
               "https://*.basemaps.cartocdn.com",
               "https://api.maptiler.com",
+              "https://server.arcgisonline.com",
               ...imageOrigins,
             ],
             connectSrc: ["'self'"],

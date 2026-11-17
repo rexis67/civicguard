@@ -1,4 +1,4 @@
-const CACHE_NAME = "civicguard-pwa-v1";
+const CACHE_NAME = "civicguard-pwa-v2";
 const STATIC_ASSETS = [
   "/",
   "/manifest.webmanifest",
@@ -41,7 +41,11 @@ self.addEventListener("fetch", (event) => {
   }
 
   // 2. Map tiles: Cache-first for buttery smooth offline/cached maps
-  if (url.hostname.includes("cartocdn.com") || url.hostname.includes("openstreetmap.org")) {
+  if (
+    url.hostname.includes("arcgisonline.com") ||
+    url.hostname.includes("cartocdn.com") ||
+    url.hostname.includes("openstreetmap.org")
+  ) {
     event.respondWith(
       caches.open("civicguard-tiles").then(async (cache) => {
         const cached = await cache.match(request);

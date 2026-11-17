@@ -33,6 +33,26 @@ const CATEGORY_ICONS = {
       <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
+  "Road Markings": (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M5 21 8 3M19 21l-3-18M9.7 6h4.6M9.2 11h5.6M8.7 16h4.6" strokeLinecap="round" />
+    </svg>
+  ),
+  "Traffic Signal": (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect height="16" rx="2" width="8" x="8" y="3" />
+      <circle cx="12" cy="7" r="1.2" />
+      <circle cx="12" cy="11" r="1.2" />
+      <circle cx="12" cy="15" r="1.2" />
+      <path d="M12 19v3" strokeLinecap="round" />
+    </svg>
+  ),
+  "Water Leak": (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 3s6 6.2 6 10.5a6 6 0 0 1-12 0C6 9.2 12 3 12 3Z" strokeLinejoin="round" />
+      <path d="M9 14.5a3 3 0 0 0 3 2.5" strokeLinecap="round" />
+    </svg>
+  ),
   Other: (
     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
       <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
@@ -257,52 +277,40 @@ export default function ReportForm({ onOptimisticSubmit, onSubmit }) {
           />
         </div>
 
-        <div>
-          <label
-            className="mb-2 block font-mono text-[10px] font-medium uppercase tracking-wider text-muted"
-            htmlFor="report-category"
-          >
+        <fieldset>
+          <legend className="mb-2 block font-mono text-[10px] font-medium uppercase tracking-wider text-muted">
             {labels.category}
-          </label>
-          <div className="mb-3 grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+          </legend>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             {[...cityConfig.categories, "Other"].map((cat) => {
               const isSelected = selectedCategory === cat;
               return (
-                <button
-                  type="button"
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`flex flex-col items-center justify-center gap-2 rounded-xl border p-3 text-center transition-all duration-150 ${
+                <label
+                  className={`relative flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border p-3 text-center transition-all duration-150 focus-within:ring-2 focus-within:ring-brand/30 ${
                     isSelected
                       ? "border-brand bg-brand/10 text-brand shadow-sm ring-2 ring-brand/30"
                       : "border-line bg-panel-raised text-muted hover:border-brand/40 hover:bg-panel-hover hover:text-ink"
                   }`}
+                  key={cat}
                 >
+                  <input
+                    checked={isSelected}
+                    className="sr-only"
+                    name="category"
+                    onChange={() => setSelectedCategory(cat)}
+                    required
+                    type="radio"
+                    value={cat}
+                  />
                   <span className={isSelected ? "text-brand" : "text-muted"}>
                     {CATEGORY_ICONS[cat] ?? CATEGORY_ICONS.Other}
                   </span>
                   <span className="font-mono text-xs font-semibold leading-tight">{cat}</span>
-                </button>
+                </label>
               );
             })}
           </div>
-          <select
-            className="block min-h-11 w-full rounded-lg border border-line bg-panel-raised px-3.5 py-2.5 text-sm text-ink outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
-            id="report-category"
-            name="category"
-            onChange={(event) => setSelectedCategory(event.target.value)}
-            required
-            value={selectedCategory}
-          >
-            <option className="bg-panel" disabled value="">
-              {labels.chooseCategory}
-            </option>
-            {cityConfig.categories.map((category) => (
-              <option className="bg-panel" key={category} value={category}>{category}</option>
-            ))}
-            <option className="bg-panel" value="Other">Other</option>
-          </select>
-        </div>
+        </fieldset>
 
         {selectedCategory === "Other" && (
           <div>

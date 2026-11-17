@@ -16,9 +16,20 @@ export const DEFAULT_CITY_CONFIG = {
     Streetlight: "Electrical Services",
     Accessibility: "Accessibility Services",
     Garbage: "Sanitation",
+    "Road Markings": "Roads & Infrastructure",
+    "Traffic Signal": "Roads & Infrastructure",
+    "Water Leak": "Municipal Services",
   },
   slaHoursBySeverity: { 1: 120, 2: 72, 3: 48, 4: 12, 5: 4 },
-  categories: ["Pothole", "Streetlight", "Accessibility", "Garbage"],
+  categories: [
+    "Pothole",
+    "Streetlight",
+    "Accessibility",
+    "Garbage",
+    "Road Markings",
+    "Traffic Signal",
+    "Water Leak",
+  ],
 };
 
 function isValidCityConfig(value) {

@@ -367,47 +367,6 @@ export default function ReportFeed({
 
   return (
     <section className="mx-auto w-full max-w-[1720px]">
-      <section aria-labelledby="home-heading" className="mb-8 grid gap-6 rounded-xl border border-line bg-panel p-5 shadow-sm sm:p-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)] lg:items-center lg:p-10">
-        <div>
-          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-brand">
-            A clearer route to local action
-          </p>
-          <h1 className="mt-3 max-w-3xl font-display text-3xl font-semibold leading-tight tracking-tight text-ink sm:text-4xl lg:text-5xl" id="home-heading">
-            Better neighborhoods start with being heard.
-          </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-muted sm:text-base">
-            Report a local issue, help the right team prioritize it, and follow its progress through resolution.
-          </p>
-          <button
-            className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-cyan px-5 py-3 text-sm font-semibold text-white shadow transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 dark:text-slate-900 dark:focus:ring-offset-slate-900"
-            onClick={onCreateReport}
-            type="button"
-          >
-            Report an issue
-            <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 20 20">
-              <path d="M4 10h12m-5-5 5 5-5 5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-            </svg>
-          </button>
-        </div>
-        <ul className="grid gap-3 border-t border-line pt-5 sm:grid-cols-3 lg:grid-cols-1 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
-          {[
-            ["No account needed", "Share a concern without creating a profile."],
-            ["Prioritized for action", "Reports are triaged to help teams focus."],
-            ["Tracked to resolution", "Follow updates with a private tracking code."],
-          ].map(([title, detail], index) => (
-            <li className="flex items-start gap-3" key={title}>
-              <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-deep font-mono text-[10px] font-semibold text-brand">
-                0{index + 1}
-              </span>
-              <span>
-                <span className="block text-sm font-semibold text-ink">{title}</span>
-                <span className="mt-1 block text-xs leading-5 text-muted">{detail}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
       <div className="mb-5 border-b border-line px-1 pb-4">
         <div className="mx-auto flex max-w-[1720px] flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">

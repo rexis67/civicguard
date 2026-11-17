@@ -87,7 +87,7 @@ The SQLite database and locally stored images live under the configured data dir
 | API | Express 4, Node 20+ |
 | Auth | 8-hour JWT in an HttpOnly, Secure, SameSite=Strict cookie; bcrypt (cost 12); hashed, expiring email and password-reset tokens |
 | Storage | SQLite (`better-sqlite3`) for users and reports, local disk or S3-compatible object storage for images |
-| Maps | Leaflet, marker clustering and heat layer; optional MapTiler light/dark raster tiles with CARTO fallback |
+| Maps | Leaflet, marker clustering and heat layer; keyless Esri dark/light raster tiles with labels |
 | QR posters | `qrcode` |
 | AI | Google Gemini via `@google/genai`, schema-constrained JSON output |
 | Ops | Docker, Render blueprint, GitHub Actions, `helmet`, `express-rate-limit` |
@@ -110,7 +110,7 @@ cp backend/.env.example backend/.env
 # then edit GEMINI_API_KEY
 ```
 
-To use MapTiler, set `MAPTILER_API_KEY` in `backend/.env`. This key is sent to browsers for map tile requests, so it is public by design: restrict it in MapTiler to your development/production site referrers and the required map-tile API. If it is unset, maps use CARTO tiles.
+The incident map uses Esri's keyless raster basemaps: a dark basemap with labels for dark mode and the Esri street basemap for light mode. No map API key is required. The older `MAPTILER_API_KEY` setting remains only for the legacy `/api/public-config` endpoint and is not used by the current map.
 
 Run the API and the Vite dev server in two terminals:
 
@@ -169,7 +169,7 @@ The repository ships a [`render.yaml`](render.yaml) blueprint configured for Ren
 
 1. Push the repo to GitHub — `npm run publish`. If the GitHub CLI is installed but not signed in, the script starts the browser sign-in flow, then creates the repo and pushes.
 2. Render → **New → Blueprint** → select the repo.
-3. Fill in `GEMINI_API_KEY`, `MAPTILER_API_KEY` (optional), and a **new** `AUTHORITY_INVITE_CODE` when prompted.
+3. Fill in `GEMINI_API_KEY` and a **new** `AUTHORITY_INVITE_CODE` when prompted. No map API key is needed.
 4. Deploy. Render builds the Docker image, generates `JWT_SECRET`, sets `NODE_ENV=production`, and seeds 12 pre-triaged demo incidents on first boot (`SEED_DEMO_DATA=true`) so the live feed is never blank.
 
 The free instance has 512 MB RAM and sleeps after 15 minutes idle, so the first request after a quiet period takes roughly a minute to wake. `/data` is ephemeral: SQLite, reports and uploads reset on restart/redeploy, and `SEED_DEMO_DATA=true` repopulates the 12 demo incidents on the next boot. That is fine for the hackathon demo. For persistence, switch `plan` to `starter` and add a 1 GB disk mounted at `/data` (paid), or point `REPORT_IMAGE_STORAGE=s3` and the database at hosted services.
@@ -184,7 +184,6 @@ Render injects `RENDER_EXTERNAL_URL`, so verification links, canonical tags and 
 docker build -t civicguard .
 docker run -p 5000:5000 \
   -e GEMINI_API_KEY=... \
-  -e MAPTILER_API_KEY=... \
   -e JWT_SECRET=... \
   -e AUTHORITY_INVITE_CODE=... \
   -v civicguard-data:/data \
@@ -207,7 +206,9 @@ Serve `dist/` from any static host and add the frontend origin to `CORS_ORIGINS`
 
 ### Vercel frontend with a hosted API
 
-`vercel.json` proxies `/api/*` and `/uploads/*` to the Render service and falls back to `/index.html` so client-side routes survive a refresh. The proxy destination is hardcoded to `https://civicguard-o1ik.onrender.com`; update both `destination` values whenever the Render URL changes, or the Vercel deployment will keep calling the old backend. Keeping the API and UI same-origin also keeps the `SameSite=Strict` auth cookie working without cross-site cookie exceptions.
+Deploy the **latest backend to Render first**, then import the repository into Vercel. `vercel.json` already sets the Vite build command, `dist` output directory, the `/api/*` and `/uploads/*` proxies, and the SPA fallback to `/index.html`. Without the latest backend, the Vercel UI can still render the legacy report array, but newer features such as city health, confirmations and tracking return `404`.
+
+The proxy destinations are hardcoded to `https://civicguard-o1ik.onrender.com`; update both `destination` values whenever the Render URL changes, or the Vercel deployment will keep calling the old backend. Keeping the API and UI same-origin also keeps the `SameSite=Strict` auth cookie working without cross-site cookie exceptions.
 
 ---
 
@@ -227,7 +228,7 @@ All variables are optional except `JWT_SECRET` in production. `GEMINI_API_KEY` e
 | `CORS_ORIGINS` | – | Comma-separated additional allowed browser origins; unlisted origins are denied |
 | `API_PUBLIC_BASE_URL` | – (relative `/uploads`) | Absolute base for locally stored image URLs |
 | `GEMINI_API_KEY` | – | Enables Gemini AI triage; without it, reports still submit and are triaged by keyword rules |
-| `MAPTILER_API_KEY` | – | Optional public browser key for MapTiler light/dark map tiles; restrict it by site referrer. CARTO is used when unset |
+| `MAPTILER_API_KEY` | – | Legacy metadata for `/api/public-config`; the current map uses keyless Esri tiles |
 | `GEMINI_MODEL` | `gemini-3.8-flash` | Model used for triage |
 | `ANALYSIS_TIMEOUT_MS` | `180000` | Abandon a stalled triage and flag the report |
 | `ALERT_WEBHOOK_URL` | – | Optional Slack/Telegram-style webhook for severity-5 triage alerts |
@@ -292,7 +293,7 @@ This replaced a synchronous call that blocked submissions for up to two minutes.
 | Method | Route | Auth | Description |
 |---|---|---|---|
 | `GET` | `/api/health` | – | SQLite and image-storage health (`200` when healthy, `503` with `status: degraded` when either dependency is unavailable) |
-| `GET` | `/api/public-config` | – | Public map provider and browser-visible MapTiler key, if configured |
+| `GET` | `/api/public-config` | – | Legacy public map provider metadata; the frontend uses keyless Esri tiles |
 | `GET` | `/api/metrics` | – | Process, HTTP, triage-queue and Gemini metrics; Prometheus text by default, JSON with `Accept: application/json` or `?format=json` |
 | `GET` | `/api/city-health` | – | Aggregate city metrics and coarse 30-day map cells; no report IDs or descriptions |
 | `GET` | `/api/reports?limit=50&offset=0&assignedTo=USER_ID` | – | Paginated reports as `{ total, limit, offset, data }`; `limit` is capped at 100; `assignedTo=unassigned` selects unassigned incidents |
@@ -383,7 +384,7 @@ The same conversation is also readable in chat form with no tooling: [`docs/copi
 - SQLite report storage is durable and indexed but remains a single-node database; multi-instance writes need a shared server database such as Postgres.
 - The public feed and operations dashboard request the newest 100 incidents per refresh. The API exposes `limit` and `offset`, and both UIs disclose when older incidents are not in the loaded page, but neither UI offers full paging yet.
 - Email verification is required, so a deployment without SMTP cannot onboard users unless `RETURN_VERIFICATION_LINK` is enabled.
-- The incident map loads CARTO tiles by default, or MapTiler tiles when `MAPTILER_API_KEY` is configured. If tiles are blocked, reports remain available as text cards.
+- The incident map uses keyless Esri raster tiles (dark and light). If tiles are blocked by a network policy, reports remain available as text cards.
 - The free Render deployment uses ephemeral storage: the 12 demo incidents reseed, but user accounts, reports and uploads reset on restart/redeploy. Use the Starter disk for persistence.
 - AI triage depends on the Gemini free-tier quota (20 reports/day for `gemini-3.8-flash`); exhausted quota degrades gracefully to manual review.
 

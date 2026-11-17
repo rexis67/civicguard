@@ -135,7 +135,7 @@ test("submits a report and shows it in the feed", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Citizen Report Form" }).click();
   await page.getByLabel("Title").fill(title);
-  await page.getByLabel("Category").selectOption("Pothole");
+  await page.locator("form").getByText("Pothole", { exact: true }).click();
   await page.getByLabel("Description").fill("A pothole is blocking the cycle lane near the park.");
   await page.getByRole("button", { name: "Submit report" }).click();
   await expect(page.getByRole("heading", { name: title })).toBeVisible();

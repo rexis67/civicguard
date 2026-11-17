@@ -2,7 +2,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -20,7 +19,10 @@ function getInitialTheme() {
   } catch (error) {
     console.warn("[CivicGuard theme] Could not read the saved theme preference:", error);
   }
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+  // The original CivicGuard deployment used the dark palette by default.
+  // Keep that look for first-time visitors; the theme toggle still persists
+  // an explicit light or dark choice.
+  return true;
 }
 
 export function ThemeProvider({ children }) {
@@ -43,7 +45,7 @@ export function ThemeProvider({ children }) {
     root.style.colorScheme = darkMode ? "dark" : "light";
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", darkMode ? "#000000" : "#ffffff");
+      ?.setAttribute("content", darkMode ? "#0b1326" : "#ffffff");
 
     if (!hasPreferenceRef.current) return;
     try {
@@ -52,18 +54,6 @@ export function ThemeProvider({ children }) {
       console.warn("[CivicGuard theme] Could not save the theme preference:", error);
     }
   }, [darkMode]);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
-    if (!mediaQuery) return undefined;
-    function syncSystemTheme(event) {
-      if (hasPreferenceRef.current) return;
-      setDarkMode(event.matches);
-    }
-
-    mediaQuery.addEventListener("change", syncSystemTheme);
-    return () => mediaQuery.removeEventListener("change", syncSystemTheme);
-  }, []);
 
   const toggleTheme = useCallback(() => {
     hasPreferenceRef.current = true;

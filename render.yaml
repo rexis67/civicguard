@@ -22,8 +22,6 @@ services:
         sync: false
       - key: AUTHORITY_INVITE_CODE
         sync: false
-      - key: MAPTILER_API_KEY
-        sync: false
       - key: AUTHORITY_EMAIL_DOMAINS
         value: ""
       # No SMTP is provisioned by this blueprint, so registration hands the

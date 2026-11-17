@@ -7,24 +7,21 @@ import { HeatLayer } from "leaflet.heat";
 import { useTheme } from "../context/ThemeContext.jsx";
 import { reportFormLabels } from "../i18n/reportForm.js";
 import { hasConfirmedReport } from "../services/deviceIdentity.js";
-import { getMapTileConfig } from "../services/api.js";
 import cityConfig from "../../config/city.json";
 
 const DEFAULT_CENTER = cityConfig.mapCenter;
 const DEFAULT_ZOOM = 12;
-const isRetina = typeof window !== "undefined" && window.devicePixelRatio > 1;
-const RETINA = isRetina ? "@2x" : "";
-const CARTO_TILE_LIGHT =
-  `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}${RETINA}.png`;
-const CARTO_TILE_DARK =
-  `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}${RETINA}.png`;
-const CARTO_ATTRIBUTION =
-  '&copy; <a href="https://carto.com/attributions">CARTO</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-const MAPTILER_ATTRIBUTION =
-  '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-const DEFAULT_TILE_CONFIG = { mapProvider: "carto", mapTilerKey: null };
-let mapTileConfigPromise;
-let mapTileConfigOverride = null;
+// Esri's public raster tiles are keyless, stable and match the map used by
+// the original CivicGuard deployment. CARTO's anonymous raster tiles now show
+// "API KEY REQUIRED" watermarks, so they are intentionally not used here.
+const ESRI_DARK_BASE =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}";
+const ESRI_DARK_LABELS =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}";
+const ESRI_LIGHT =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}";
+const ESRI_ATTRIBUTION =
+  'Tiles &copy; <a href="https://www.esri.com/">Esri</a> — Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 const EMPTY_REPORTS = [];
 const MARKER_ICONS = new Map();
 
@@ -101,45 +98,26 @@ function observeMapSize(map, element) {
   };
 }
 
-function tileUrl(dark, config) {
-  if (config?.mapProvider === "maptiler" && config.mapTilerKey) {
-    const style = dark ? "dark-v2" : "streets-v2";
-    return `https://api.maptiler.com/maps/${style}/{z}/{x}/{y}.png?key=${encodeURIComponent(config.mapTilerKey)}`;
-  }
-  return dark ? CARTO_TILE_DARK : CARTO_TILE_LIGHT;
-}
-
-function tileOptions(config) {
-  // Avoid zoom-time tile churn and retain nearby tiles for smoother pans.
-  return {
-    attribution: config?.mapProvider === "maptiler"
-      ? MAPTILER_ATTRIBUTION
-      : CARTO_ATTRIBUTION,
+function createTileLayers(dark) {
+  const options = {
+    attribution: ESRI_ATTRIBUTION,
     maxZoom: 19,
+    // Avoid zoom-time tile churn and retain nearby tiles for smoother pans.
     updateWhenIdle: L.Browser.mobile,
     updateWhenZooming: false,
     keepBuffer: 4,
   };
-}
 
-function createTileLayer(dark, config) {
-  return L.tileLayer(tileUrl(dark, config), tileOptions(config));
-}
-
-function loadMapTileConfig() {
-  if (mapTileConfigOverride) return Promise.resolve(mapTileConfigOverride);
-  if (!mapTileConfigPromise) {
-    mapTileConfigPromise = getMapTileConfig().catch((error) => {
-      console.warn("CivicGuard map provider settings could not be loaded; using CARTO tiles:", error);
-      return DEFAULT_TILE_CONFIG;
-    });
+  if (!dark) {
+    return [L.tileLayer(ESRI_LIGHT, options)];
   }
-  return mapTileConfigPromise;
-}
 
-function disableMapTiler() {
-  mapTileConfigOverride = DEFAULT_TILE_CONFIG;
-  mapTileConfigPromise = Promise.resolve(DEFAULT_TILE_CONFIG);
+  // Esri splits its dark basemap into a label-free base and a transparent
+  // label overlay. Add both so places stay readable in dark mode.
+  return [
+    L.tileLayer(ESRI_DARK_BASE, options),
+    L.tileLayer(ESRI_DARK_LABELS, { ...options, attribution: "" }),
+  ];
 }
 
 function makePopup(report, onSelect, onConfirm) {
@@ -214,9 +192,8 @@ function IncidentMapComponent({ reports = EMPTY_REPORTS, height = 380, onSelect,
   const clusterRef = useRef(null);
   const heatLayerRef = useRef(null);
   const heatmapEnabledRef = useRef(false);
-  const tileLayerRef = useRef(null);
+  const tileLayersRef = useRef([]);
   const tileModeRef = useRef(null);
-  const tileConfigRef = useRef(DEFAULT_TILE_CONFIG);
   const onSelectRef = useRef(onSelect);
   const onConfirmRef = useRef(onConfirm);
   const fittedRef = useRef(false);
@@ -263,32 +240,37 @@ function IncidentMapComponent({ reports = EMPTY_REPORTS, height = 380, onSelect,
     tileErrorRef.current = next;
     setTileError(next);
   };
-  const watchTileLayer = (layer) => layer
-    .on("tileerror", (event) => {
-      if (tileConfigRef.current.mapProvider === "maptiler") {
-        console.warn("MapTiler tiles failed; switching to CARTO tiles.");
-        disableMapTiler();
-        tileConfigRef.current = DEFAULT_TILE_CONFIG;
-        tileLayerRef.current?.remove();
-        const map = mapRef.current;
-        if (map) {
-          tileLayerRef.current = watchTileLayer(
-            createTileLayer(darkModeRef.current, DEFAULT_TILE_CONFIG),
-          ).addTo(map);
-        }
-        setTileErrorIfChanged(false);
-        return;
-      }
-      if (!tileErrorLoggedRef.current) {
-        console.warn("CivicGuard map tiles could not be loaded:", event.error);
-        tileErrorLoggedRef.current = true;
-      }
-      setTileErrorIfChanged(true);
-    })
-    .on("tileload", () => {
-      tileErrorLoggedRef.current = false;
-      setTileErrorIfChanged(false);
+  const watchTileLayers = (layers) => {
+    layers.forEach((layer, index) => {
+      // Only the base layer controls the error banner. The transparent label
+      // overlay may occasionally miss a tile without breaking the map.
+      layer
+        .on("tileerror", (event) => {
+          if (index !== 0) return;
+          if (!tileErrorLoggedRef.current) {
+            console.warn("CivicGuard map tiles could not be loaded:", event.error);
+            tileErrorLoggedRef.current = true;
+          }
+          setTileErrorIfChanged(true);
+        })
+        .on("tileload", () => {
+          if (index !== 0) return;
+          tileErrorLoggedRef.current = false;
+          setTileErrorIfChanged(false);
+        });
     });
+    return layers;
+  };
+
+  const replaceTileLayers = (dark) => {
+    const map = mapRef.current;
+    if (!map) return;
+    tileLayersRef.current.forEach((layer) => layer.remove());
+    tileLayersRef.current = watchTileLayers(createTileLayers(dark))
+      .map((layer) => layer.addTo(map));
+    tileModeRef.current = dark;
+    setTileErrorIfChanged(false);
+  };
 
   useEffect(() => {
     onSelectRef.current = onSelect;
@@ -324,19 +306,7 @@ function IncidentMapComponent({ reports = EMPTY_REPORTS, height = 380, onSelect,
       map.attributionControl.setPosition("bottomleft");
       mapRef.current = map;
 
-      const dark = darkModeRef.current;
-      tileLayerRef.current = watchTileLayer(
-        createTileLayer(dark, tileConfigRef.current),
-      ).addTo(map);
-      tileModeRef.current = dark;
-      void loadMapTileConfig().then((config) => {
-        if (mapRef.current !== map || config.mapProvider !== "maptiler") return;
-        tileConfigRef.current = config;
-        tileLayerRef.current?.remove();
-        tileLayerRef.current = watchTileLayer(
-          createTileLayer(darkModeRef.current, config),
-        ).addTo(map);
-      });
+      replaceTileLayers(darkModeRef.current);
 
       resizeCleanup = observeMapSize(map, containerRef.current);
 
@@ -480,7 +450,7 @@ function IncidentMapComponent({ reports = EMPTY_REPORTS, height = 380, onSelect,
       mapRef.current = null;
       clusterRef.current = null;
       heatLayerRef.current = null;
-      tileLayerRef.current = null;
+      tileLayersRef.current = [];
       tileModeRef.current = null;
       mapCreatedRef.current = false;
       return undefined;
@@ -495,7 +465,7 @@ function IncidentMapComponent({ reports = EMPTY_REPORTS, height = 380, onSelect,
       heatmapEnabledRef.current = false;
       clusterRef.current = null;
       heatLayerRef.current = null;
-      tileLayerRef.current = null;
+      tileLayersRef.current = [];
       tileModeRef.current = null;
       fittedRef.current = false;
       prevSignatureRef.current = null;
@@ -505,12 +475,8 @@ function IncidentMapComponent({ reports = EMPTY_REPORTS, height = 380, onSelect,
   }, []);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || tileModeRef.current === resolvedDark) return;
-
-    // Reuse Leaflet's layer to avoid a layer teardown and tile churn on theme changes.
-    tileLayerRef.current?.setUrl(tileUrl(resolvedDark, tileConfigRef.current));
-    tileModeRef.current = resolvedDark;
+    if (!mapRef.current || tileModeRef.current === resolvedDark) return;
+    replaceTileLayers(resolvedDark);
   }, [resolvedDark]);
 
   useEffect(() => {
@@ -666,7 +632,7 @@ function IncidentMapComponent({ reports = EMPTY_REPORTS, height = 380, onSelect,
           <button
             onClick={() => {
               setTileErrorIfChanged(false);
-              tileLayerRef.current?.redraw();
+              tileLayersRef.current.forEach((layer) => layer.redraw());
             }}
             type="button"
           >
@@ -702,11 +668,18 @@ export function LocationPicker({ value, onChange, height = 240, language = "en" 
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
-  const tileLayerRef = useRef(null);
+  const tileLayersRef = useRef([]);
   const tileModeRef = useRef(darkMode);
-  const tileConfigRef = useRef(DEFAULT_TILE_CONFIG);
   const onChangeRef = useRef(onChange);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const replaceTileLayers = (dark) => {
+    const map = mapRef.current;
+    if (!map) return;
+    tileLayersRef.current.forEach((layer) => layer.remove());
+    tileLayersRef.current = createTileLayers(dark).map((layer) => layer.addTo(map));
+    tileModeRef.current = dark;
+  };
 
   const handleSelectLandmark = (landmark) => {
     if (!landmark) return;
@@ -735,37 +708,9 @@ export function LocationPicker({ value, onChange, height = 240, language = "en" 
       markerZoomAnimation: !reduceMotion,
     });
     map.attributionControl.setPosition("bottomleft");
-
-    const resolvedDark = tileModeRef.current;
-    tileLayerRef.current = createTileLayer(resolvedDark, DEFAULT_TILE_CONFIG)
-      .on("tileerror", () => {
-        if (tileConfigRef.current.mapProvider !== "maptiler") return;
-        console.warn("MapTiler tiles failed; switching to CARTO tiles.");
-        disableMapTiler();
-        tileConfigRef.current = DEFAULT_TILE_CONFIG;
-        tileLayerRef.current?.remove();
-        tileLayerRef.current = createTileLayer(tileModeRef.current, DEFAULT_TILE_CONFIG)
-          .addTo(map);
-      })
-      .addTo(map);
-
     mapRef.current = map;
-    void loadMapTileConfig().then((config) => {
-      if (mapRef.current !== map || config.mapProvider !== "maptiler") return;
-      tileConfigRef.current = config;
-      tileLayerRef.current?.remove();
-      tileLayerRef.current = createTileLayer(tileModeRef.current, config)
-        .on("tileerror", () => {
-          if (tileConfigRef.current.mapProvider !== "maptiler") return;
-          console.warn("MapTiler tiles failed; switching to CARTO tiles.");
-          disableMapTiler();
-          tileConfigRef.current = DEFAULT_TILE_CONFIG;
-          tileLayerRef.current?.remove();
-          tileLayerRef.current = createTileLayer(tileModeRef.current, DEFAULT_TILE_CONFIG)
-            .addTo(map);
-        })
-        .addTo(map);
-    });
+    replaceTileLayers(tileModeRef.current);
+
     map.on("click", (event) => {
       onChangeRef.current?.({ lat: event.latlng.lat, lng: event.latlng.lng });
     });
@@ -776,16 +721,13 @@ export function LocationPicker({ value, onChange, height = 240, language = "en" 
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
-      tileLayerRef.current = null;
+      tileLayersRef.current = [];
     };
   }, []);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || tileModeRef.current === darkMode) return;
-
-    tileLayerRef.current?.setUrl(tileUrl(darkMode, tileConfigRef.current));
-    tileModeRef.current = darkMode;
+    if (!mapRef.current || tileModeRef.current === darkMode) return;
+    replaceTileLayers(darkMode);
   }, [darkMode]);
 
   useEffect(() => {
@@ -866,14 +808,14 @@ export function LocationPicker({ value, onChange, height = 240, language = "en" 
         <label className="sr-only" htmlFor="landmark-quick-picker">Quick jump to neighborhood</label>
         <select
           id="landmark-quick-picker"
-          className="min-h-9 flex-1 rounded-md border border-line bg-panel px-2.5 py-1.5 font-mono text-[10px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+          className="min-h-9 min-w-0 flex-1 rounded-md border border-line bg-panel px-2.5 py-1.5 font-mono text-[10px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
           onChange={(e) => {
             const found = BENGALURU_LANDMARKS.find((lm) => lm.name === e.target.value);
             if (found) handleSelectLandmark(found);
           }}
           defaultValue=""
         >
-          <option value="" disabled>Jump to area / neighborhood (e.g. Indiranagar, Koramangala...)</option>
+          <option value="" disabled>Choose a neighborhood…</option>
           {BENGALURU_LANDMARKS.map((lm) => (
             <option key={lm.name} value={lm.name}>{lm.name}</option>
           ))}

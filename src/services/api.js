@@ -103,6 +103,16 @@ export async function getReportsPage({
     }
 
     const page = await response.json();
+    // Older CivicGuard deployments returned a bare report array. Keep the
+    // split Vercel frontend usable until its Render backend is redeployed.
+    if (Array.isArray(page)) {
+      return {
+        total: page.length,
+        limit,
+        offset,
+        data: page,
+      };
+    }
     return {
       total: Number.isSafeInteger(page.total) ? page.total : 0,
       limit: Number.isSafeInteger(page.limit) ? page.limit : limit,
